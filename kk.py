@@ -42,6 +42,7 @@ class FFmpegVideoEditorApp:
         for i in range(5):
             var = tk.StringVar()
             self.concat_folders.append(var)
+        self.concat_folder_widgets = []  # track dynamic UI rows
         self.concat_output = tk.StringVar()
         self.concat_transition = tk.DoubleVar(value=0.5)
         
@@ -474,30 +475,98 @@ class FFmpegVideoEditorApp:
     
     def create_concat_tab(self, parent):
         """创建转场拼接标签页"""
-        folders_frame = ttk.LabelFrame(parent, text="视频文件夹（最多5个，按顺序拼接）", padding=10)
-        folders_frame.grid(row=0, column=0, columnspan=3, sticky='ew', padx=10, pady=5)
-        
-        for i in range(5):
-            frame = ttk.Frame(folders_frame)
-            frame.pack(fill='x', padx=5, pady=2)
-            ttk.Label(frame, text=f"文件夹{i+1}:", width=10).pack(side='left')
-            ttk.Entry(frame, textvariable=self.concat_folders[i], width=35).pack(side='left', padx=5)
-            ttk.Button(frame, text="浏览", command=lambda i=i: self.browse_folder(self.concat_folders[i])).pack(side='left')
-        
+        folders_lf = ttk.LabelFrame(parent, text="视频文件夹（按顺序拼接，可动态添加）", padding=5)
+        folders_lf.grid(row=0, column=0, columnspan=3, sticky='ew', padx=10, pady=5)
+
+        # 可滚动区域：Canvas + Scrollbar
+        canvas = tk.Canvas(folders_lf, height=180, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(folders_lf, orient='vertical', command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right', fill='y')
+        canvas.pack(side='top', fill='both', expand=True)
+
+        self.concat_folders_container = ttk.Frame(canvas)
+        win_id = canvas.create_window((0, 0), window=self.concat_folders_container, anchor='nw')
+
+        def _on_inner_configure(event):
+            canvas.configure(scrollregion=canvas.bbox('all'))
+
+        def _on_canvas_resize(event):
+            canvas.itemconfig(win_id, width=event.width)
+
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), 'units')
+
+        self.concat_folders_container.bind('<Configure>', _on_inner_configure)
+        canvas.bind('<Configure>', _on_canvas_resize)
+        canvas.bind('<MouseWheel>', _on_mousewheel)
+        self.concat_folders_container.bind('<MouseWheel>', _on_mousewheel)
+
+        # 初始化行（使用已有的 StringVar）
+        self.concat_folder_widgets = []
+        for var in self.concat_folders:
+            self._add_concat_folder_row(var)
+
+        # 添加按钮
+        add_btn_frame = ttk.Frame(folders_lf)
+        add_btn_frame.pack(fill='x', padx=5, pady=(4, 2))
+        ttk.Button(add_btn_frame, text="＋ 添加文件夹", command=self.add_concat_folder).pack(side='left')
+        ttk.Label(add_btn_frame, text="（可无限添加，至少保留1个）", foreground='gray').pack(side='left', padx=8)
+
         ttk.Label(parent, text="输出文件夹:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
         ttk.Entry(parent, textvariable=self.concat_output, width=45).grid(row=1, column=1, padx=5)
         ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.concat_output, True)).grid(row=1, column=2, padx=5)
-        
+
         transition_frame = ttk.LabelFrame(parent, text="转场设置", padding=10)
         transition_frame.grid(row=2, column=0, columnspan=3, sticky='ew', padx=10, pady=5)
-        
+
         ttk.Label(transition_frame, text="转场时长(秒):").pack(side='left', padx=5)
         ttk.Entry(transition_frame, textvariable=self.concat_transition, width=10).pack(side='left', padx=5)
         ttk.Label(transition_frame, text=" (0=无转场)", foreground='gray').pack(side='left', padx=5)
-        
+
         ttk.Button(parent, text="开始转场拼接", command=self.start_concat, style='Accent.TButton').grid(row=3, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
-        
+
+    def _add_concat_folder_row(self, var):
+        """在转场拼接列表末尾追加一行"""
+        idx = len(self.concat_folder_widgets)
+        frame = ttk.Frame(self.concat_folders_container)
+        frame.pack(fill='x', padx=5, pady=2)
+
+        label = ttk.Label(frame, text=f"文件夹{idx + 1}:", width=8)
+        label.pack(side='left')
+        ttk.Entry(frame, textvariable=var, width=35).pack(side='left', padx=5)
+        ttk.Button(frame, text="浏览", command=lambda v=var: self.browse_folder(v)).pack(side='left')
+        if idx >= 5:
+            ttk.Button(frame, text="✕", width=3,
+                       command=lambda v=var, f=frame: self.remove_concat_folder(v, f)).pack(side='left', padx=3)
+        else:
+            ttk.Label(frame, width=4).pack(side='left', padx=3)
+
+        self.concat_folder_widgets.append({'var': var, 'frame': frame, 'label': label})
+
+    def add_concat_folder(self):
+        """动态添加一个文件夹行"""
+        var = tk.StringVar()
+        self.concat_folders.append(var)
+        self._add_concat_folder_row(var)
+
+    def remove_concat_folder(self, var, frame):
+        """删除指定的文件夹行（前5个固定，不可删除）"""
+        idx = self.concat_folders.index(var)
+        if idx < 5:
+            messagebox.showwarning("提示", "前5个文件夹不能移除！")
+            return
+        self.concat_folders.pop(idx)
+        self.concat_folder_widgets.pop(idx)
+        frame.destroy()
+        self._update_concat_folder_labels()
+
+    def _update_concat_folder_labels(self):
+        """删除行后重新编号所有标签"""
+        for i, widget in enumerate(self.concat_folder_widgets):
+            widget['label'].config(text=f"文件夹{i + 1}:")
+
     def create_pip_tab(self, parent):
         """创建画中画标签页"""
         ttk.Label(parent, text="背景视频文件夹:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
@@ -1513,19 +1582,20 @@ class FFmpegVideoEditorApp:
             
             cmd = [
                 self.ffmpeg_path,
-                '-ss', str(start_time),
                 '-i', input_path,
+                '-ss', str(start_time),
                 '-t', str(duration),
                 '-c:v', 'libx264',
                 '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
                 '-crf', '23',
                 '-c:a', 'aac',
                 '-threads', '0',
+                '-avoid_negative_ts', 'make_zero',
                 '-y',
                 output_path
             ]
             
-            self.log(f"    执行: ffmpeg -ss {start_time} -i ... -t {duration}")
+            self.log(f"    执行: ffmpeg -i ... -ss {start_time} -t {duration}")
             
             if sys.platform == 'win32':
                 startupinfo = subprocess.STARTUPINFO()
@@ -1559,8 +1629,8 @@ class FFmpegVideoEditorApp:
         try:
             cmd = [
                 self.ffmpeg_path,
-                '-ss', str(start_time),
                 '-i', input_path,
+                '-ss', str(start_time),
                 '-t', str(duration),
                 '-vn',
                 '-c:a', 'libmp3lame',

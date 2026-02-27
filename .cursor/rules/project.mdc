@@ -1,0 +1,44 @@
+---
+description: han-mix 项目总览与开发规范
+alwaysApply: true
+---
+
+# han-mix — FFmpeg 批处理视频编辑工具
+
+## 项目概览
+
+- 语言：Python，单文件 `kk.py`
+- UI：Tkinter 多标签页
+- 核心：调用 `ffmpeg.exe` 完成视频处理
+- 打包：PyInstaller → `dist/kk.exe`（内嵌 ffmpeg.exe）
+- 版本：v7.0，Windows 平台
+
+## 架构模式
+
+```
+FFmpegVideoEditorApp
+├── create_widgets()
+│   └── create_<tab>_tab()   # 每个功能一个 Tab
+├── batch_<tab>_operation()  # 批处理入口（跑在子线程）
+└── _<tab>_ffmpeg()          # 实际 ffmpeg 命令封装
+```
+
+## 添加新功能的标准流程
+
+```
+1. create_<name>_tab()    → 添加 Tab UI
+2. batch_<name>_operation() → 收集参数，遍历文件，调 _<name>_ffmpeg()
+3. _<name>_ffmpeg(input, output, **params) → 构建并执行 ffmpeg 命令
+```
+
+## 关键约定
+
+- `log(msg)` — 线程安全日志，所有操作必须用它输出状态
+- `_find_ffmpeg()` — 获取 ffmpeg 路径，禁止硬编码路径
+- 所有批处理跑在 `threading.Thread` 里，禁止阻塞主线程
+- ffmpeg 命令用 `subprocess.run(cmd, capture_output=True)`
+- 输出文件默认放在源文件同目录，加后缀区分（如 `_out`、`_speed`）
+
+## 现有功能 Tab
+
+merge / split / concat / pip / speed / rotate / watermark / volume / convert / extract
