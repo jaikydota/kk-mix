@@ -16,7 +16,7 @@ import shutil
 class FFmpegVideoEditorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("智能视频剪辑工具 v7.0 - 完整增强版")
+        self.root.title("智能视频剪辑工具 v8.0 - 填充音乐功能")
         self.root.geometry("900x850")
         
         # 控制变量
@@ -45,6 +45,7 @@ class FFmpegVideoEditorApp:
         self.concat_folder_widgets = []  # track dynamic UI rows
         self.concat_output = tk.StringVar()
         self.concat_transition = tk.DoubleVar(value=0.5)
+        self.concat_transition_type = tk.StringVar(value='fade')
         
         # 画中画变量
         self.pip_bg_folder = tk.StringVar()
@@ -95,9 +96,16 @@ class FFmpegVideoEditorApp:
         self.extract_output = tk.StringVar()
         self.extract_interval = tk.StringVar(value="5")  # 秒
         
+        # 填充音乐
+        self.music_video_folder = tk.StringVar()
+        self.music_audio_folder = tk.StringVar()
+        self.music_output_folder = tk.StringVar()
+        self.music_keep_original_audio = tk.BooleanVar(value=False)
+        
         # 支持的文件类型
         self.video_extensions = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm'}
         self.image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+        self.audio_extensions = {'.mp3', '.wav', '.aac', '.flac', '.ogg', '.wma', '.m4a'}
         self.all_extensions = self.video_extensions | self.image_extensions
         
         self.create_widgets()
@@ -142,7 +150,7 @@ class FFmpegVideoEditorApp:
         ttk.Button(status_frame, text="测试FFmpeg", command=self.test_ffmpeg).pack(side='right', padx=5)
         
         # 标题
-        title_label = ttk.Label(self.root, text="智能视频剪辑工具 v7.0 - 完整增强版", font=("Arial", 16, "bold"))
+        title_label = ttk.Label(self.root, text="智能视频剪辑工具 v8.0 - 填充音乐功能", font=("Arial", 16, "bold"))
         title_label.pack(pady=10)
         
         # 创建Notebook
@@ -190,6 +198,10 @@ class FFmpegVideoEditorApp:
         extract_frame = ttk.Frame(notebook)
         notebook.add(extract_frame, text="批量提取帧")
         self.create_extract_tab(extract_frame)
+        
+        music_frame = ttk.Frame(notebook)
+        notebook.add(music_frame, text="填充音乐")
+        self.create_music_tab(music_frame)
         
         # 性能设置
         perf_frame = ttk.LabelFrame(self.root, text="性能与稳定性设置", padding=5)
@@ -331,6 +343,19 @@ class FFmpegVideoEditorApp:
         if files:
             self.log(f"  示例: {files[:3]}")
         return sorted(files)
+    
+    def get_audio_video_files(self, folder):
+        """获取视频和音频文件"""
+        if not os.path.exists(folder):
+            self.log(f"错误：文件夹不存在 {folder}")
+            return []
+        
+        valid_ext = self.video_extensions | self.audio_extensions
+        files = [f for f in os.listdir(folder) if Path(f).suffix.lower() in valid_ext]
+        self.log(f"扫描音乐文件夹: 发现 {len(files)} 个文件")
+        if files:
+            self.log(f"  示例: {files[:3]}")
+        return sorted(files)
         
     def get_video_info_safe(self, video_path):
         """安全获取视频信息"""
@@ -393,6 +418,30 @@ class FFmpegVideoEditorApp:
             self.log(f"    ✗ 读取异常: {str(e)}")
             return 0
             
+    def _get_video_duration_fast(self, video_path):
+        """通过 ffprobe 快速获取视频时长（秒），失败返回 0.0"""
+        try:
+            ffprobe_path = self.ffmpeg_path.replace('ffmpeg', 'ffprobe')
+            cmd = [
+                ffprobe_path, '-v', 'error',
+                '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                video_path,
+            ]
+            if sys.platform == 'win32':
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
+                                   startupinfo=si, encoding='utf-8', errors='ignore')
+            else:
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
+                                   encoding='utf-8', errors='ignore')
+            if r.returncode == 0 and r.stdout.strip():
+                return float(r.stdout.strip())
+        except Exception:
+            pass
+        return 0.0
+
     def get_video_resolution(self, video_path):
         """获取视频分辨率"""
         try:
@@ -521,8 +570,21 @@ class FFmpegVideoEditorApp:
         transition_frame.grid(row=2, column=0, columnspan=3, sticky='ew', padx=10, pady=5)
 
         ttk.Label(transition_frame, text="转场时长(秒):").pack(side='left', padx=5)
-        ttk.Entry(transition_frame, textvariable=self.concat_transition, width=10).pack(side='left', padx=5)
-        ttk.Label(transition_frame, text=" (0=无转场)", foreground='gray').pack(side='left', padx=5)
+        ttk.Entry(transition_frame, textvariable=self.concat_transition, width=8).pack(side='left', padx=5)
+        ttk.Label(transition_frame, text="(0=无转场)", foreground='gray').pack(side='left', padx=(0, 15))
+
+        ttk.Label(transition_frame, text="转场类型:").pack(side='left', padx=5)
+        transition_types = [
+            'fade', 'fadeblack', 'fadewhite',
+            'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+            'slideleft', 'slideright', 'slideup', 'slidedown',
+            'smoothleft', 'smoothright', 'smoothup', 'smoothdown',
+            'circleopen', 'circleclose', 'radial', 'dissolve', 'pixelize',
+        ]
+        ttk.Combobox(
+            transition_frame, textvariable=self.concat_transition_type,
+            values=transition_types, width=14, state='readonly'
+        ).pack(side='left', padx=5)
 
         ttk.Button(parent, text="开始转场拼接", command=self.start_concat, style='Accent.TButton').grid(row=3, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
@@ -735,6 +797,27 @@ class FFmpegVideoEditorApp:
         
         ttk.Button(parent, text="开始批量提取帧", command=self.start_extract, style='Accent.TButton').grid(row=3, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
+    
+    def create_music_tab(self, parent):
+        """创建填充音乐标签页"""
+        ttk.Label(parent, text="视频文件夹(视频原片):").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.music_video_folder, width=45).grid(row=0, column=1, padx=5)
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.music_video_folder)).grid(row=0, column=2, padx=5)
+        
+        ttk.Label(parent, text="音乐文件夹（视频/音乐）:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.music_audio_folder, width=45).grid(row=1, column=1, padx=5)
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.music_audio_folder)).grid(row=1, column=2, padx=5)
+        
+        ttk.Label(parent, text="输出文件夹:").grid(row=2, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.music_output_folder, width=45).grid(row=2, column=1, padx=5)
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.music_output_folder, True)).grid(row=2, column=2, padx=5)
+        
+        ttk.Checkbutton(parent, text="保留原生视频声音（与音乐混合）",
+                        variable=self.music_keep_original_audio).grid(
+            row=3, column=0, columnspan=3, sticky='w', padx=10, pady=2)
+        
+        ttk.Button(parent, text="开始填充音乐", command=self.start_music, style='Accent.TButton').grid(row=4, column=0, columnspan=3, pady=15)
+        parent.columnconfigure(1, weight=1)
         
     # ===== 启动方法（新增）=====
     
@@ -760,6 +843,11 @@ class FFmpegVideoEditorApp:
         
     def start_extract(self):
         thread = threading.Thread(target=self.batch_extract_operation)
+        thread.daemon = True
+        thread.start()
+    
+    def start_music(self):
+        thread = threading.Thread(target=self.batch_music_operation)
         thread.daemon = True
         thread.start()
     
@@ -1344,6 +1432,201 @@ class FFmpegVideoEditorApp:
             self.log(f"    ✗ 异常: {str(e)}")
             return 0
 
+    # ===== 填充音乐功能实现 =====
+
+    def batch_music_operation(self):
+        """批量填充音乐"""
+        self.current_operation = "music"
+        self.set_controls_state(True)
+        self.progress_var.set(0)
+        
+        temp_dir = None
+        try:
+            video_folder = self.music_video_folder.get()
+            audio_folder = self.music_audio_folder.get()
+            output_folder = self.music_output_folder.get()
+            
+            if not video_folder or not audio_folder or not output_folder:
+                messagebox.showerror("错误", "请选择视频文件夹、音乐文件夹和输出文件夹！")
+                return
+            
+            os.makedirs(output_folder, exist_ok=True)
+            
+            video_files = self.get_video_files(video_folder)
+            if not video_files:
+                messagebox.showerror("错误", "视频文件夹中没有找到视频文件！")
+                return
+            
+            music_source_files = self.get_audio_video_files(audio_folder)
+            if not music_source_files:
+                messagebox.showerror("错误", "音乐文件夹中没有找到视频或音频文件！")
+                return
+            
+            self.log(f"\n{'='*60}")
+            self.log(f"开始填充音乐")
+            self.log(f"视频数: {len(video_files)} 个")
+            self.log(f"音乐源: {len(music_source_files)} 个")
+            self.log(f"{'='*60}\n")
+            
+            temp_dir = os.path.join(output_folder, '_temp')
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            music_files = []
+            for idx, mf in enumerate(music_source_files, 1):
+                if self.check_pause_stop():
+                    break
+                mf_path = os.path.join(audio_folder, mf)
+                ext = Path(mf).suffix.lower()
+                
+                if ext in self.audio_extensions:
+                    music_files.append(mf_path)
+                    self.log(f"  音频文件直接使用: {mf}")
+                elif ext in self.video_extensions:
+                    temp_audio = os.path.join(temp_dir, f"extract_{idx:03d}.aac")
+                    self.log(f"  从视频提取音频: {mf}")
+                    if self._music_extract_audio_ffmpeg(mf_path, temp_audio):
+                        music_files.append(temp_audio)
+                    else:
+                        self.log(f"    ✗ 提取失败，跳过: {mf}")
+            
+            if not music_files:
+                messagebox.showerror("错误", "未能获取任何可用的音乐文件！")
+                return
+            
+            while len(music_files) < len(video_files):
+                music_files.append(music_files[-1])
+            
+            keep_audio = self.music_keep_original_audio.get()
+            mode_label = "混合模式（保留原声）" if keep_audio else "替换模式（移除原声）"
+            self.log(f"\n可用音乐: {len(music_files)} 个（含补齐）")
+            self.log(f"音频模式: {mode_label}")
+            self.log(f"开始合并...\n")
+            
+            success_count = 0
+            total = len(video_files)
+            
+            for idx, (vf, af) in enumerate(zip(video_files, music_files), 1):
+                if self.check_pause_stop():
+                    break
+                
+                video_path = os.path.join(video_folder, vf)
+                output_name = f"music_{idx:03d}_{Path(vf).stem}.mp4"
+                output_path = os.path.join(output_folder, output_name)
+                
+                self.log(f"[{idx}/{total}] {vf} + {os.path.basename(af)}")
+                
+                if self._music_replace_ffmpeg(video_path, af, output_path, keep_audio):
+                    success_count += 1
+                    self.log(f"  ✓ 成功: {output_name}")
+                else:
+                    self.log(f"  ✗ 失败: {vf}")
+                
+                self.progress_var.set((idx / total) * 100)
+                self.update_status(f"填充音乐中... {idx}/{total}")
+            
+            self.log(f"\n{'='*60}")
+            self.log(f"完成！成功处理 {success_count}/{total} 个视频")
+            self.log(f"{'='*60}")
+            
+            if success_count > 0:
+                messagebox.showinfo("完成", f"成功填充音乐 {success_count} 个视频！")
+            
+        except Exception as e:
+            messagebox.showerror("错误", f"填充音乐失败: {str(e)}")
+            self.log(f"✗ 错误: {str(e)}")
+        finally:
+            if temp_dir and os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                    self.log("已清理临时文件")
+                except Exception:
+                    pass
+            self.set_controls_state(False)
+    
+    def _music_extract_audio_ffmpeg(self, input_path, output_path):
+        """从视频中提取音频"""
+        try:
+            cmd = [
+                self.ffmpeg_path,
+                '-i', input_path,
+                '-vn',
+                '-c:a', 'aac',
+                '-y',
+                output_path
+            ]
+            
+            if sys.platform == 'win32':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
+            else:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                                       encoding='utf-8', errors='ignore')
+            
+            if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                self.log(f"    ✓ 音频提取成功")
+                return True
+            else:
+                self.log(f"    ✗ 音频提取失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                return False
+            
+        except Exception as e:
+            self.log(f"    ✗ 音频提取异常: {str(e)}")
+            return False
+    
+    def _music_replace_ffmpeg(self, video_path, audio_path, output_path, keep_original_audio=False):
+        """合入新音频；keep_original_audio=True 时保留原声与新音频混合"""
+        try:
+            if keep_original_audio:
+                cmd = [
+                    self.ffmpeg_path,
+                    '-i', video_path,
+                    '-i', audio_path,
+                    '-filter_complex', '[0:a][1:a]amix=inputs=2:duration=shortest[aout]',
+                    '-map', '0:v',
+                    '-map', '[aout]',
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-shortest',
+                    '-y',
+                    output_path
+                ]
+            else:
+                cmd = [
+                    self.ffmpeg_path,
+                    '-i', video_path,
+                    '-i', audio_path,
+                    '-map', '0:v',
+                    '-map', '1:a',
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-shortest',
+                    '-y',
+                    output_path
+                ]
+            
+            if sys.platform == 'win32':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
+                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
+            else:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
+                                       encoding='utf-8', errors='ignore')
+            
+            if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                file_size_mb = os.path.getsize(output_path) / 1024 / 1024
+                self.log(f"    ✓ 合并成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
+                return True
+            else:
+                self.log(f"    ✗ 合并失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                return False
+            
+        except Exception as e:
+            self.log(f"    ✗ 合并异常: {str(e)}")
+            return False
+
     # ===== 原有功能实现（包含修复）=====
 
     def start_merge(self):
@@ -1881,55 +2164,101 @@ class FFmpegVideoEditorApp:
             self.set_controls_state(False)
     
     def _concat_with_transition(self, video_paths, output_path):
-        """转场拼接实现（简化版）"""
+        """转场拼接：td=0 用 concat filter 保证时间戳连续，td>0 用 xfade+acrossfade"""
         try:
             if len(video_paths) == 1:
-                # 只有一个视频，直接复制
                 shutil.copy2(video_paths[0], output_path)
                 return True
-            
-            # 创建临时文件列表
-            temp_list = os.path.join(os.path.dirname(output_path), f"temp_list_{os.getpid()}.txt")
-            with open(temp_list, 'w', encoding='utf-8') as f:
-                for video in video_paths:
-                    f.write(f"file '{os.path.abspath(video)}'\n")
-            
-            # 使用concat滤镜
-            cmd = [
-                self.ffmpeg_path,
-                '-f', 'concat',
-                '-safe', '0',
-                '-i', temp_list,
-                '-c:v', 'libx264',
-                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
-                '-crf', '23',
-                '-c:a', 'aac',
-                '-threads', '0',
-                '-y',
-                output_path
-            ]
-            
+
+            n = len(video_paths)
+            td = self.concat_transition.get()
+            transition_type = self.concat_transition_type.get() or 'fade'
+            preset = 'ultrafast' if self.speed_priority.get() else 'medium'
+
+            si = None
             if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+            def run_cmd(cmd):
+                return subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=900,
+                    startupinfo=si, encoding='utf-8', errors='ignore'
+                )
+
+            # 构建公共输入参数
+            inputs = []
+            for v in video_paths:
+                inputs += ['-i', v]
+
+            if td <= 0:
+                # ── 无转场：用 concat filter 替代 -f concat demuxer ──
+                # concat filter 会统一时间基，避免帧率/时间戳不连续导致的卡顿
+                streams = ''.join(f'[{i}:v][{i}:a]' for i in range(n))
+                filter_complex = f'{streams}concat=n={n}:v=1:a=1[vout][aout]'
+                cmd = [self.ffmpeg_path] + inputs + [
+                    '-filter_complex', filter_complex,
+                    '-map', '[vout]', '-map', '[aout]',
+                    '-c:v', 'libx264', '-preset', preset, '-crf', '23',
+                    '-c:a', 'aac', '-threads', '0', '-y', output_path,
+                ]
             else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=900,
-                                       encoding='utf-8', errors='ignore')
-            
-            # 清理临时文件
-            if os.path.exists(temp_list):
-                os.remove(temp_list)
-            
+                # ── 有转场：用 xfade + acrossfade 链实现真正的转场动画 ──
+                # 第一步：ffprobe 获取每段时长（计算 xfade offset 必需）
+                durations = []
+                for v in video_paths:
+                    d = self._get_video_duration_fast(v)
+                    if d <= 0:
+                        self.log(f"    ✗ 无法获取时长: {os.path.basename(v)}")
+                        return False
+                    durations.append(d)
+                    self.log(f"    时长: {os.path.basename(v)} = {d:.2f}s")
+
+                # 转场时长不能超过最短片段的一半
+                min_dur = min(durations)
+                if td >= min_dur:
+                    td = round(min_dur * 0.4, 3)
+                    self.log(f"    ⚠ 转场时长超过最短片段，自动调整为 {td:.2f}s")
+
+                # 第二步：构建 filter_complex
+                # xfade offset = 前所有片段时长之和 - 已叠加的转场时长
+                # acrossfade 不需要 offset，直接链式连接即可
+                filter_parts = []
+                prev_v = '[0:v]'
+                prev_a = '[0:a]'
+                offset = 0.0
+                for i in range(1, n):
+                    offset += durations[i - 1] - td
+                    is_last = (i == n - 1)
+                    out_v = '[vout]' if is_last else f'[v{i}]'
+                    out_a = '[aout]' if is_last else f'[a{i}]'
+                    filter_parts.append(
+                        f"{prev_v}[{i}:v]xfade=transition={transition_type}"
+                        f":duration={td:.3f}:offset={offset:.3f}{out_v}"
+                    )
+                    filter_parts.append(
+                        f"{prev_a}[{i}:a]acrossfade=d={td:.3f}{out_a}"
+                    )
+                    prev_v = out_v
+                    prev_a = out_a
+
+                filter_complex = ';'.join(filter_parts)
+                cmd = [self.ffmpeg_path] + inputs + [
+                    '-filter_complex', filter_complex,
+                    '-map', '[vout]', '-map', '[aout]',
+                    '-c:v', 'libx264', '-preset', preset, '-crf', '23',
+                    '-c:a', 'aac', '-threads', '0', '-y', output_path,
+                ]
+
+            result = run_cmd(cmd)
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 file_size_mb = os.path.getsize(output_path) / 1024 / 1024
                 self.log(f"    ✓ 拼接成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 拼接失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 拼接失败: {result.stderr[:300] if result.stderr else '未知错误'}")
                 return False
-            
+
         except Exception as e:
             self.log(f"    ✗ 拼接异常: {str(e)}")
             return False
