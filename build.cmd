@@ -2,10 +2,11 @@
 chcp 65001 >nul
 echo 正在打包 kk.py ...
 
-.venv\Scripts\pyinstaller.exe ^
+uv run pyinstaller ^
     --onedir ^
     --windowed ^
     --add-binary "ffmpeg.exe;." ^
+    --add-binary "ffprobe.exe;." ^
     --name kk ^
     --clean ^
     kk.py

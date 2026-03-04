@@ -4,7 +4,7 @@
 a = Analysis(
     ['kk.py'],
     pathex=[],
-    binaries=[('ffmpeg.exe', '.')],
+    binaries=[('ffmpeg.exe', '.'), ('ffprobe.exe', '.')],
     datas=[],
     hiddenimports=[],
     hookspath=[],

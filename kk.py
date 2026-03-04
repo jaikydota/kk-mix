@@ -16,7 +16,7 @@ import shutil
 class FFmpegVideoEditorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("智能视频剪辑工具 v8.0 - 填充音乐功能")
+        self.root.title("智能视频剪辑工具 v8.1 - 填充音乐优化")
         self.root.geometry("900x850")
         
         # 控制变量
@@ -150,7 +150,7 @@ class FFmpegVideoEditorApp:
         ttk.Button(status_frame, text="测试FFmpeg", command=self.test_ffmpeg).pack(side='right', padx=5)
         
         # 标题
-        title_label = ttk.Label(self.root, text="智能视频剪辑工具 v8.0 - 填充音乐功能", font=("Arial", 16, "bold"))
+        title_label = ttk.Label(self.root, text="智能视频剪辑工具 v8.1 - 填充音乐优化", font=("Arial", 16, "bold"))
         title_label.pack(pady=10)
         
         # 创建Notebook
@@ -419,15 +419,32 @@ class FFmpegVideoEditorApp:
             return 0
             
     def _get_video_duration_fast(self, video_path):
-        """通过 ffprobe 快速获取视频时长（秒），失败返回 0.0"""
+        """通过 ffprobe 快速获取视频时长（秒），失败时用 ffmpeg 解析，仍失败返回 0.0"""
+        ffprobe_path = self.ffmpeg_path.replace('ffmpeg', 'ffprobe')
+        if os.path.exists(ffprobe_path) or shutil.which(ffprobe_path):
+            try:
+                cmd = [
+                    ffprobe_path, '-v', 'error',
+                    '-show_entries', 'format=duration',
+                    '-of', 'default=noprint_wrappers=1:nokey=1',
+                    video_path,
+                ]
+                if sys.platform == 'win32':
+                    si = subprocess.STARTUPINFO()
+                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
+                                       startupinfo=si, encoding='utf-8', errors='ignore')
+                else:
+                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
+                                       encoding='utf-8', errors='ignore')
+                if r.returncode == 0 and r.stdout.strip():
+                    return float(r.stdout.strip())
+            except Exception:
+                pass
+
+        # ffprobe 不可用时，用 ffmpeg -i 解析 stderr
         try:
-            ffprobe_path = self.ffmpeg_path.replace('ffmpeg', 'ffprobe')
-            cmd = [
-                ffprobe_path, '-v', 'error',
-                '-show_entries', 'format=duration',
-                '-of', 'default=noprint_wrappers=1:nokey=1',
-                video_path,
-            ]
+            cmd = [self.ffmpeg_path, '-i', video_path]
             if sys.platform == 'win32':
                 si = subprocess.STARTUPINFO()
                 si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -436,8 +453,11 @@ class FFmpegVideoEditorApp:
             else:
                 r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
                                    encoding='utf-8', errors='ignore')
-            if r.returncode == 0 and r.stdout.strip():
-                return float(r.stdout.strip())
+            import re
+            m = re.search(r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)', r.stderr)
+            if m:
+                h, mi, s = m.group(1), m.group(2), m.group(3)
+                return float(h) * 3600 + float(mi) * 60 + float(s)
         except Exception:
             pass
         return 0.0
@@ -2036,6 +2056,9 @@ class FFmpegVideoEditorApp:
     def _merge_with_moviepy_safe(self, file1_path, file2_path, output_path, image_duration):
         """MoviePy备用方案"""
         try:
+            import PIL.Image
+            if not hasattr(PIL.Image, 'ANTIALIAS'):
+                PIL.Image.ANTIALIAS = PIL.Image.LANCZOS
             from moviepy.editor import VideoFileClip, ImageClip, clips_array
             
             ext1 = Path(file1_path).suffix.lower()
@@ -2075,8 +2098,9 @@ class FFmpegVideoEditorApp:
                 elif ext2 not in self.image_extensions:
                     final = final.set_audio(clip2.audio)
             
-            # 导出
-            final.write_videofile(output_path, codec='libx264', preset='ultrafast', logger=None)
+            # 导出（ImageClip 无 fps，显式指定兜底）
+            output_fps = getattr(clip1, 'fps', None) or getattr(clip2, 'fps', None) or 24
+            final.write_videofile(output_path, fps=output_fps, codec='libx264', preset='ultrafast', logger=None)
             
             # 清理
             clip1.close()
