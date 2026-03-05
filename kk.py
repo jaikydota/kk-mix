@@ -3160,7 +3160,7 @@ class FFmpegVideoEditorApp:
             f.write("\n")
 
     def _llm_translate(self, texts: list, target_lang: str) -> list:
-        """使用 OpenAI 兼容 API 逐句翻译，失败最多重试 3 次，最终失败保留原文。"""
+        """使用 OpenAI 兼容 API 并发翻译，每句最多重试 3 次，最终失败保留原文。"""
         try:
             import openai
         except ImportError:
@@ -3169,37 +3169,43 @@ class FFmpegVideoEditorApp:
 
         lang_map = {"zh": "中文", "en": "英文"}
         lang_name = lang_map.get(target_lang, target_lang)
-        client = openai.OpenAI(
+        client = openai.AsyncOpenAI(
             base_url=self.llm_api_base.get().strip(),
             api_key=self.llm_api_key.get().strip(),
         )
         model = self.llm_model.get().strip()
-        results = []
-        for i, text in enumerate(texts):
-            if not text:
-                results.append(text)
-                continue
-            translated = text
-            for attempt in range(3):
-                try:
-                    resp = client.chat.completions.create(
-                        model=model,
-                        messages=[{
-                            "role": "user",
-                            "content": (
-                                f"将以下文本翻译为{lang_name}，保持原文含义，"
-                                f"只输出译文，不要解释。\n{text}"
-                            ),
-                        }],
-                        temperature=0.3,
-                    )
-                    translated = resp.choices[0].message.content.strip()
-                    break
-                except Exception as e:
-                    if attempt == 2:
-                        self.log(f"    ⚠ 第 {i+1} 句翻译失败，保留原文: {e}")
-            results.append(translated)
-        return results
+        log_fn = self.log
+
+        async def _translate_all():
+            sem = asyncio.Semaphore(8)
+
+            async def one(i: int, text: str):
+                if not text:
+                    return i, text
+                async with sem:
+                    for attempt in range(3):
+                        try:
+                            resp = await client.chat.completions.create(
+                                model=model,
+                                messages=[{
+                                    "role": "user",
+                                    "content": (
+                                        f"将以下文本翻译为{lang_name}，保持原文含义，"
+                                        f"只输出译文，不要解释。\n{text}"
+                                    ),
+                                }],
+                                temperature=0.3,
+                            )
+                            return i, resp.choices[0].message.content.strip()
+                        except Exception as e:
+                            if attempt == 2:
+                                log_fn(f"    ⚠ 第 {i+1} 句翻译失败，保留原文: {e}")
+                    return i, text
+
+            results = await asyncio.gather(*[one(i, t) for i, t in enumerate(texts)])
+            return [r for _, r in sorted(results)]
+
+        return asyncio.run(_translate_all())
 
 
 def main():

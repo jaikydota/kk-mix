@@ -139,27 +139,22 @@ def _batch_speech_operation(app):
                     app.log("  ✗ 文案文件为空，跳过")
                     continue
 
-                app.log(f"  文案共 {len(lines)} 行，开始 TTS 合成...")
+                app.log(f"  文案共 {len(lines)} 行，批量提交 TTS 合成...")
 
-                # 逐行 TTS
+                # 批量 TTS（一次提交全部行，等待完成后批量取回）
                 ref_bytes = Path(ref_path).read_bytes()
                 wav_segments = []
                 tts_ok = True
-                for line_idx, line in enumerate(lines, 1):
-                    if app.check_pause_stop():
-                        tts_ok = False
-                        break
-                    app.log(f"    TTS [{line_idx}/{len(lines)}]: {line[:40]}{'...' if len(line) > 40 else ''}")
-                    seg_path = os.path.join(tmp_dir, f"seg_{idx:03d}_{line_idx:03d}.wav")
-                    try:
-                        wav_bytes = asyncio.run(_call_tts_line(line, ref_bytes, mcp_url))
+                try:
+                    wav_bytes_list = asyncio.run(_call_tts_batch(lines, ref_bytes, mcp_url))
+                    for line_idx, wav_bytes in enumerate(wav_bytes_list, 1):
+                        seg_path = os.path.join(tmp_dir, f"seg_{idx:03d}_{line_idx:03d}.wav")
                         Path(seg_path).write_bytes(wav_bytes)
                         wav_segments.append(seg_path)
-                        app.log(f"    ✓ 第 {line_idx} 行合成完成")
-                    except Exception as e:
-                        app.log(f"    ✗ 第 {line_idx} 行 TTS 失败: {e}")
-                        tts_ok = False
-                        break
+                    app.log(f"  ✓ 批量 TTS 完成，共 {len(wav_bytes_list)} 段")
+                except Exception as e:
+                    app.log(f"  ✗ 批量 TTS 失败: {e}")
+                    tts_ok = False
 
                 if not tts_ok or not wav_segments:
                     app.log(f"  ✗ TTS 未完成，跳过视频: {vf}")
@@ -247,6 +242,47 @@ async def _call_tts_line(text: str, ref_voice_bytes: bytes, mcp_url: str) -> byt
         wav_data = (await client.call_tool("tts_get_result", {"task_id": task_id})).data
 
     return _decode_bytes(_unwrap_data(wav_data))
+
+
+async def _call_tts_batch(texts: list, ref_voice_bytes: bytes, mcp_url: str) -> list:
+    """批量调用 MCP TTS，一次提交所有行，等待完成后批量取回 WAV bytes 列表。"""
+    from fastmcp import Client
+
+    ref_b64 = base64.b64encode(ref_voice_bytes).decode()
+
+    async with Client(mcp_url) as client:
+        task_id = _unwrap_data((await client.call_tool(
+            "tts_generate_voice_batch",
+            {"texts": texts, "prompt_voice_bytes_list": ref_b64},
+        )).data)
+
+        timeout = 600.0
+        elapsed = 0.0
+        interval = 5.0
+        info = {}
+        while elapsed < timeout:
+            raw = (await client.call_tool("tts_query_task", {"task_id": task_id})).data
+            info = _unwrap_data(raw)
+            status = info.get("status") if isinstance(info, dict) else None
+            if status == "completed":
+                break
+            if status == "failed":
+                raise RuntimeError(f"TTS 批量任务失败: {info.get('error')}")
+            await asyncio.sleep(interval)
+            elapsed += interval
+        else:
+            raise TimeoutError(f"TTS 批量任务超时（>{timeout}s），task_id={task_id}")
+
+        count = info.get("result", {}).get("count", len(texts)) if isinstance(info, dict) else len(texts)
+        wav_list = []
+        for i in range(count):
+            wav_b64 = _unwrap_data((await client.call_tool(
+                "tts_get_result_batch_item",
+                {"task_id": task_id, "index": i},
+            )).data)
+            wav_list.append(_decode_bytes(wav_b64))
+
+    return wav_list
 
 
 def _unwrap_data(data):
