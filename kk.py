@@ -12,6 +12,8 @@ import threading
 import numpy as np
 from PIL import Image
 import shutil
+import speech_tab
+import settings_window
 
 class FFmpegVideoEditorApp:
     def __init__(self, root):
@@ -101,6 +103,14 @@ class FFmpegVideoEditorApp:
         self.music_audio_folder = tk.StringVar()
         self.music_output_folder = tk.StringVar()
         self.music_keep_original_audio = tk.BooleanVar(value=False)
+
+        # 视频配音变量
+        self.speech_video_folder = tk.StringVar()
+        self.speech_text_folder = tk.StringVar()
+        self.speech_ref_voice_folder = tk.StringVar()
+        self.speech_output_folder = tk.StringVar()
+        self.mcp_url = tk.StringVar(value="http://localhost:8400/mcp")
+        self.speech_keep_audio = tk.BooleanVar(value=False)
         
         # 支持的文件类型
         self.video_extensions = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm'}
@@ -147,61 +157,76 @@ class FFmpegVideoEditorApp:
         status_frame = ttk.Frame(self.root)
         status_frame.pack(fill='x', padx=10, pady=5)
         ttk.Label(status_frame, text=f"FFmpeg路径: {self.ffmpeg_path}", foreground='green').pack(side='left')
+        ttk.Button(status_frame, text="设置", command=lambda: settings_window.open_settings(self)).pack(side='right', padx=5)
         ttk.Button(status_frame, text="测试FFmpeg", command=self.test_ffmpeg).pack(side='right', padx=5)
         
         # 标题
         title_label = ttk.Label(self.root, text="智能视频剪辑工具 v8.1 - 填充音乐优化", font=("Arial", 16, "bold"))
         title_label.pack(pady=10)
         
-        # 创建Notebook
-        notebook = ttk.Notebook(self.root)
-        notebook.pack(fill='both', expand=True, padx=10, pady=5)
-        
-        # 原有功能标签页
-        merge_frame = ttk.Frame(notebook)
-        notebook.add(merge_frame, text="左右分屏合并")
-        self.create_merge_tab(merge_frame)
-        
-        split_frame = ttk.Frame(notebook)
-        notebook.add(split_frame, text="批量分割视频")
-        self.create_split_tab(split_frame)
-        
-        concat_frame = ttk.Frame(notebook)
-        notebook.add(concat_frame, text="视频转场拼接")
-        self.create_concat_tab(concat_frame)
-        
-        pip_frame = ttk.Frame(notebook)
-        notebook.add(pip_frame, text="画中画合成")
-        self.create_pip_tab(pip_frame)
-        
-        speed_frame = ttk.Frame(notebook)
-        notebook.add(speed_frame, text="批量变速/倒放")
-        self.create_speed_tab(speed_frame)
-        
-        # ===== 新增功能标签页 =====
-        rotate_frame = ttk.Frame(notebook)
-        notebook.add(rotate_frame, text="批量旋转/翻转")
-        self.create_rotate_tab(rotate_frame)
-        
-        watermark_frame = ttk.Frame(notebook)
-        notebook.add(watermark_frame, text="批量添加水印")
-        self.create_watermark_tab(watermark_frame)
-        
-        volume_frame = ttk.Frame(notebook)
-        notebook.add(volume_frame, text="批量调整音量")
-        self.create_volume_tab(volume_frame)
-        
-        convert_frame = ttk.Frame(notebook)
-        notebook.add(convert_frame, text="批量格式转换")
-        self.create_convert_tab(convert_frame)
-        
-        extract_frame = ttk.Frame(notebook)
-        notebook.add(extract_frame, text="批量提取帧")
-        self.create_extract_tab(extract_frame)
-        
-        music_frame = ttk.Frame(notebook)
-        notebook.add(music_frame, text="填充音乐")
-        self.create_music_tab(music_frame)
+        # 两行 Tab 按钮栏
+        tab_bar = tk.Frame(self.root, bg='#f0f0f0')
+        tab_bar.pack(fill='x', padx=10, pady=(5, 0))
+
+        # 内容区（单一共享区域）
+        content_area = tk.Frame(self.root, relief='groove', bd=2, bg='#f0f0f0')
+        content_area.pack(fill='both', expand=True, padx=10, pady=(0, 5))
+
+        self._tab_frames = {}
+        self._tab_btns = {}
+        self._active_tab = None
+
+        ROW1 = [
+            ("左右分屏合并", "merge"),
+            ("批量分割视频", "split"),
+            ("视频转场拼接", "concat"),
+            ("画中画合成",   "pip"),
+            ("批量变速/倒放", "speed"),
+            ("批量旋转/翻转", "rotate"),
+            ("批量添加水印", "watermark"),
+            ("批量调整音量", "volume"),
+            ("批量格式转换", "convert"),
+            ("批量提取帧",   "extract"),
+        ]
+        # 从"填充音乐"开始放第二层，后续新增功能也加在这里
+        ROW2 = [
+            ("填充音乐",  "music"),
+            ("视频配音",  "speech"),
+        ]
+        CREATE_MAP = {
+            "merge":     self.create_merge_tab,
+            "split":     self.create_split_tab,
+            "concat":    self.create_concat_tab,
+            "pip":       self.create_pip_tab,
+            "speed":     self.create_speed_tab,
+            "rotate":    self.create_rotate_tab,
+            "watermark": self.create_watermark_tab,
+            "volume":    self.create_volume_tab,
+            "convert":   self.create_convert_tab,
+            "extract":   self.create_extract_tab,
+            "music":     self.create_music_tab,
+            "speech":    lambda f: speech_tab.create_speech_tab(self, f),
+        }
+
+        for row_tabs in [ROW1, ROW2]:
+            row_frame = tk.Frame(tab_bar, bg='#f0f0f0')
+            row_frame.pack(fill='x', pady=1)
+            for tab_text, tab_key in row_tabs:
+                frame = ttk.Frame(content_area)
+                self._tab_frames[tab_key] = frame
+                CREATE_MAP[tab_key](frame)
+                btn = tk.Button(
+                    row_frame, text=tab_text,
+                    command=lambda k=tab_key: self._switch_tab(k),
+                    relief='raised', bg='#e1e1e1', fg='#1a1a1a',
+                    bd=1, padx=8, pady=3, cursor='hand2',
+                    font=('微软雅黑', 9),
+                    activebackground='#d0e8ff', activeforeground='#000000',
+                )
+                btn.pack(side='left', padx=2, pady=2)
+                self._tab_btns[tab_key] = btn
+
+        self._switch_tab("merge")
         
         # 性能设置
         perf_frame = ttk.LabelFrame(self.root, text="性能与稳定性设置", padding=5)
@@ -489,8 +514,18 @@ class FFmpegVideoEditorApp:
         except:
             return 1920, 1080
 
+    def _switch_tab(self, key):
+        """切换到指定 Tab，隐藏其余内容区"""
+        for k, frame in self._tab_frames.items():
+            frame.pack_forget()
+        for k, btn in self._tab_btns.items():
+            btn.config(bg='#e1e1e1', fg='#1a1a1a', relief='raised', font=('微软雅黑', 9))
+        self._tab_frames[key].pack(fill='both', expand=True)
+        self._tab_btns[key].config(bg='#ffffff', fg='#000000', relief='flat', font=('微软雅黑', 9, 'bold'))
+        self._active_tab = key
+
     # ===== 标签页创建（原有+新增）=====
-    
+
     def create_merge_tab(self, parent):
         """创建分屏合并标签页"""
         ttk.Label(parent, text="文件夹1 (左侧视频/图片):").grid(row=0, column=0, sticky='w', padx=10, pady=5)
@@ -980,7 +1015,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
             
         except Exception as e:
@@ -1125,7 +1160,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
             
         except Exception as e:
@@ -1224,7 +1259,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
             
         except Exception as e:
@@ -1340,7 +1375,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
             
         except Exception as e:
@@ -1445,7 +1480,7 @@ class FFmpegVideoEditorApp:
                 frames = [f for f in os.listdir(output_folder) if f.endswith('.jpg')]
                 return len(frames)
             else:
-                self.log(f"    ✗ 提取失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 提取失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return 0
             
         except Exception as e:
@@ -1588,7 +1623,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 音频提取成功")
                 return True
             else:
-                self.log(f"    ✗ 音频提取失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 音频提取失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
             
         except Exception as e:
@@ -1640,7 +1675,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 合并成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 合并失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 合并失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
             
         except Exception as e:
@@ -1910,7 +1945,7 @@ class FFmpegVideoEditorApp:
                                        encoding='utf-8', errors='ignore')
             
             if result.returncode != 0:
-                error_msg = result.stderr[:200] if result.stderr else "未知错误"
+                error_msg = result.stderr[-500:] if result.stderr else "未知错误"
                 self.log(f"    ✗ FFmpeg错误: {error_msg}")
                 return False
                 
@@ -2046,7 +2081,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
             
         except Exception as e:
@@ -2280,7 +2315,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 拼接成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 拼接失败: {result.stderr[:300] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 拼接失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
 
         except Exception as e:
@@ -2417,7 +2452,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 画中画成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 画中画失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 画中画失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
             
         except Exception as e:
@@ -2540,7 +2575,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 变速成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 变速失败: {result.stderr[:200] if result.stderr else '未知错误'}")
+                self.log(f"    ✗ 变速失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
             
         except Exception as e:
