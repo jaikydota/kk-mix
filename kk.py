@@ -1,3 +1,5 @@
+import asyncio
+import base64
 import os
 import sys
 import json
@@ -14,6 +16,117 @@ from PIL import Image
 import shutil
 import speech_tab
 import settings_window
+
+
+# ─────────────────────────────────────────────────────────────
+# MCP 异步调用（模块级，通过 asyncio.run() 在 daemon thread 中使用）
+# ─────────────────────────────────────────────────────────────
+
+async def _mcp_separate(audio_path: str, mcp_url: str):
+    """Demucs 人声分离。返回 (vocals_bytes, no_vocals_bytes)。"""
+    from fastmcp import Client
+    audio_b64 = base64.b64encode(open(audio_path, "rb").read()).decode()
+    async with Client(mcp_url) as client:
+        task_id = (await client.call_tool(
+            "demucs_service_separate_audio",
+            {"audio_bytes": audio_b64, "model": "htdemucs", "two_stems": True},
+        )).data
+
+        elapsed = 0.0
+        while elapsed < 600:
+            info = (await client.call_tool(
+                "demucs_service_query_task", {"task_id": task_id}
+            )).data
+            if info.get("status") == "completed":
+                break
+            if info.get("status") == "failed":
+                raise RuntimeError(f"Demucs 失败: {info.get('error')}")
+            await asyncio.sleep(5)
+            elapsed += 5
+        else:
+            raise TimeoutError("Demucs 超时（600s）")
+
+        vocals_raw = (await client.call_tool(
+            "demucs_service_get_result", {"task_id": task_id, "stem": "vocals"}
+        )).data
+        no_vocals_raw = (await client.call_tool(
+            "demucs_service_get_result", {"task_id": task_id, "stem": "no_vocals"}
+        )).data
+
+    def _to_bytes(v):
+        if isinstance(v, bytes):
+            return v
+        return base64.b64decode(v)
+
+    return _to_bytes(vocals_raw), _to_bytes(no_vocals_raw)
+
+
+async def _mcp_transcribe(audio_path: str, mcp_url: str) -> list:
+    """Whisper 转录。返回 segments 列表 [{"start", "end", "text"}, ...]。"""
+    from fastmcp import Client
+    audio_b64 = base64.b64encode(open(audio_path, "rb").read()).decode()
+    async with Client(mcp_url) as client:
+        task_id = (await client.call_tool(
+            "whisper_transcribe_audio",
+            {"audio_bytes": audio_b64, "language": None},
+        )).data
+
+        elapsed = 0.0
+        while elapsed < 600:
+            info = (await client.call_tool(
+                "whisper_query_task", {"task_id": task_id}
+            )).data
+            if info.get("status") == "completed":
+                break
+            if info.get("status") == "failed":
+                raise RuntimeError(f"Whisper 失败: {info.get('error')}")
+            await asyncio.sleep(3)
+            elapsed += 3
+        else:
+            raise TimeoutError("Whisper 超时（600s）")
+
+        result = (await client.call_tool(
+            "whisper_get_result", {"task_id": task_id}
+        )).data
+
+    return result.get("segments", [])
+
+
+async def _mcp_tts_batch(texts: list, ref_voice_path: str, mcp_url: str) -> list:
+    """TTS 批量合成。返回 wav_bytes 列表，顺序与 texts 一致。"""
+    from fastmcp import Client
+    prompt_b64 = base64.b64encode(open(ref_voice_path, "rb").read()).decode()
+    async with Client(mcp_url) as client:
+        task_id = (await client.call_tool(
+            "tts_generate_voice_batch",
+            {"texts": texts, "prompt_voice_bytes_list": prompt_b64},
+        )).data
+
+        elapsed = 0.0
+        info = {}
+        while elapsed < 600:
+            info = (await client.call_tool(
+                "tts_query_task", {"task_id": task_id}
+            )).data
+            if info.get("status") == "completed":
+                break
+            if info.get("status") == "failed":
+                raise RuntimeError(f"TTS 失败: {info.get('error')}")
+            await asyncio.sleep(5)
+            elapsed += 5
+        else:
+            raise TimeoutError("TTS 超时（600s）")
+
+        count = info.get("result", {}).get("count", len(texts))
+        wav_list = []
+        for i in range(count):
+            wav_b64 = (await client.call_tool(
+                "tts_get_result_batch_item",
+                {"task_id": task_id, "index": i},
+            )).data
+            wav_list.append(base64.b64decode(wav_b64) if isinstance(wav_b64, str) else wav_b64)
+
+    return wav_list
 
 class FFmpegVideoEditorApp:
     def __init__(self, root):
@@ -111,15 +224,26 @@ class FFmpegVideoEditorApp:
         self.speech_output_folder = tk.StringVar()
         self.mcp_url = tk.StringVar(value="http://localhost:8400/mcp")
         self.speech_keep_audio = tk.BooleanVar(value=False)
-        
+
+        # 视频翻译变量
+        self.translate_folder = tk.StringVar()
+        self.translate_output = tk.StringVar()
+        self.translate_target_lang = tk.StringVar(value="zh")
+
+        # LLM 翻译配置
+        self.llm_api_base = tk.StringVar(value="https://api.openai.com/v1")
+        self.llm_api_key = tk.StringVar()
+        self.llm_model = tk.StringVar(value="gpt-4o")
+
         # 支持的文件类型
         self.video_extensions = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm'}
         self.image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
         self.audio_extensions = {'.mp3', '.wav', '.aac', '.flac', '.ogg', '.wma', '.m4a'}
         self.all_extensions = self.video_extensions | self.image_extensions
         
+        settings_window.load_settings(self)
         self.create_widgets()
-        
+
     def _find_ffmpeg(self):
         """查找FFmpeg"""
         # PyInstaller 打包后优先从捆绑目录查找
@@ -192,6 +316,7 @@ class FFmpegVideoEditorApp:
         ROW2 = [
             ("填充音乐",  "music"),
             ("视频配音",  "speech"),
+            ("视频翻译",  "translate"),
         ]
         CREATE_MAP = {
             "merge":     self.create_merge_tab,
@@ -206,6 +331,7 @@ class FFmpegVideoEditorApp:
             "extract":   self.create_extract_tab,
             "music":     self.create_music_tab,
             "speech":    lambda f: speech_tab.create_speech_tab(self, f),
+            "translate": self.create_translate_tab,
         }
 
         for row_tabs in [ROW1, ROW2]:
@@ -2583,11 +2709,504 @@ class FFmpegVideoEditorApp:
             return False
 
 
+    # ─────────────────────────────────────────────────────────────
+    # 视频翻译 Tab UI
+    # ─────────────────────────────────────────────────────────────
+
+    def create_translate_tab(self, parent):
+        """创建视频翻译标签页"""
+        ttk.Label(parent, text="视频文件夹:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.translate_folder, width=45).grid(row=0, column=1, padx=5)
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.translate_folder)).grid(row=0, column=2, padx=5)
+
+        ttk.Label(parent, text="输出文件夹:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.translate_output, width=45).grid(row=1, column=1, padx=5)
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.translate_output, True)).grid(row=1, column=2, padx=5)
+
+        lang_frame = ttk.LabelFrame(parent, text="翻译设置", padding=10)
+        lang_frame.grid(row=2, column=0, columnspan=3, sticky='ew', padx=10, pady=5)
+
+        ttk.Label(lang_frame, text="目标语言:").pack(side='left', padx=5)
+        lang_combo = ttk.Combobox(
+            lang_frame,
+            textvariable=self.translate_target_lang,
+            values=["zh", "en"],
+            width=8,
+            state="readonly",
+        )
+        lang_combo.pack(side='left', padx=5)
+        ttk.Label(lang_frame, text="zh=中文  en=英文", foreground='gray').pack(side='left', padx=10)
+
+        ttk.Button(
+            parent, text="开始批量翻译配音",
+            command=self.start_translate,
+            style='Accent.TButton',
+        ).grid(row=3, column=0, columnspan=3, pady=15)
+
+        parent.columnconfigure(1, weight=1)
+
+    def start_translate(self):
+        thread = threading.Thread(target=self.batch_translate_operation)
+        thread.daemon = True
+        thread.start()
+
+    def batch_translate_operation(self):
+        """批量视频翻译配音入口"""
+        self.current_operation = "translate"
+        self.set_controls_state(True)
+        self.progress_var.set(0)
+
+        try:
+            folder = self.translate_folder.get().strip()
+            output_folder = self.translate_output.get().strip()
+            target_lang = self.translate_target_lang.get().strip() or "zh"
+
+            if not folder or not output_folder:
+                messagebox.showerror("错误", "请选择视频文件夹和输出文件夹！")
+                return
+            if not self.mcp_url.get().strip():
+                messagebox.showerror("错误", "请在设置中配置 MCP 地址！")
+                return
+            if not self.llm_api_key.get().strip():
+                messagebox.showerror("错误", "请在设置中配置 LLM API Key！")
+                return
+
+            os.makedirs(output_folder, exist_ok=True)
+
+            video_files = self.get_video_files(folder)
+            if not video_files:
+                messagebox.showerror("错误", "文件夹中没有找到视频文件！")
+                return
+
+            task_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            if getattr(sys, 'frozen', False):
+                base_dir = Path(sys.executable).parent
+            else:
+                base_dir = Path(sys.argv[0]).parent
+            task_temp_root = base_dir / "temp" / task_ts
+
+            self.log(f"\n{'='*60}")
+            self.log(f"开始批量翻译配音")
+            self.log(f"视频数: {len(video_files)} 个  目标语言: {target_lang}")
+            self.log(f"临时目录: {task_temp_root}")
+            self.log(f"{'='*60}\n")
+
+            success_count = 0
+            for idx, video_file in enumerate(video_files, 1):
+                if self.check_pause_stop():
+                    break
+
+                video_path = os.path.join(folder, video_file)
+                video_temp_dir = task_temp_root / Path(video_file).stem
+                os.makedirs(video_temp_dir, exist_ok=True)
+
+                self.log(f"\n[{idx}/{len(video_files)}] 处理: {video_file}")
+                ok = self._translate_video(video_path, output_folder, str(video_temp_dir), target_lang)
+                if ok:
+                    success_count += 1
+                    self.log(f"✓ 完成: {video_file}")
+                else:
+                    self.log(f"✗ 失败: {video_file}")
+
+                self.progress_var.set((idx / len(video_files)) * 100)
+                self.update_status(f"翻译配音中... {idx}/{len(video_files)}")
+
+            self.log(f"\n{'='*60}")
+            self.log(f"完成！成功处理 {success_count}/{len(video_files)} 个视频")
+            self.log(f"{'='*60}")
+
+            if success_count > 0:
+                messagebox.showinfo("完成", f"成功翻译配音 {success_count} 个视频！")
+
+        except Exception as e:
+            messagebox.showerror("错误", f"翻译配音失败: {str(e)}")
+            self.log(f"✗ 错误: {str(e)}")
+        finally:
+            self.set_controls_state(False)
+
+    # ─────────────────────────────────────────────────────────────
+    # 视频翻译核心逻辑
+    # ─────────────────────────────────────────────────────────────
+
+    def _translate_video(self, input_path: str, output_folder: str, temp_dir: str, target_lang: str) -> bool:
+        """对单个视频执行完整 11 步翻译配音流程。"""
+        stem = Path(input_path).stem
+        mcp_url = self.mcp_url.get().strip()
+
+        def p(n, msg):
+            self.log(f"  [{n}/11] {msg}")
+
+        try:
+            # Step 1 — 提取音频
+            p(1, "提取音频...")
+            origin_audio = os.path.join(temp_dir, "origin_audio.mp3")
+            cmd = [
+                self.ffmpeg_path, "-i", input_path,
+                "-vn", "-ar", "44100", "-ac", "2", "-ab", "192k", "-f", "mp3",
+                "-y", origin_audio,
+            ]
+            r = self._run_ffmpeg(cmd, timeout=300)
+            if not r:
+                return False
+
+            # Step 2 — Demucs 人声分离
+            p(2, "人声分离（Demucs）...")
+            try:
+                vocals_bytes, no_vocals_bytes = asyncio.run(
+                    _mcp_separate(origin_audio, mcp_url)
+                )
+            except Exception as e:
+                self.log(f"    ✗ Demucs 失败: {e}")
+                return False
+            vocals_path = os.path.join(temp_dir, "vocals.wav")
+            no_vocals_path = os.path.join(temp_dir, "no_vocals.wav")
+            open(vocals_path, "wb").write(vocals_bytes)
+            open(no_vocals_path, "wb").write(no_vocals_bytes)
+
+            # Step 3 — 截取参考音色（前 8 秒）
+            p(3, "截取参考音色（8 秒）...")
+            ref_voice_path = os.path.join(temp_dir, "ref_voice.wav")
+            cmd = [
+                self.ffmpeg_path, "-i", vocals_path,
+                "-t", "8", "-c", "copy", "-y", ref_voice_path,
+            ]
+            if not self._run_ffmpeg(cmd, timeout=60):
+                return False
+
+            # Step 4 — Whisper 转录
+            p(4, "语音转录（Whisper）...")
+            try:
+                segments = asyncio.run(_mcp_transcribe(vocals_path, mcp_url))
+            except Exception as e:
+                self.log(f"    ✗ Whisper 失败: {e}")
+                return False
+            if not segments:
+                self.log("    ✗ 转录结果为空")
+                return False
+            self.log(f"    转录段数: {len(segments)}")
+
+            # Step 5 — LLM 翻译
+            p(5, f"LLM 翻译 → {target_lang}...")
+            texts = [seg.get("text", "").strip() for seg in segments]
+            translated = self._llm_translate(texts, target_lang)
+
+            # Step 6 — 生成 SRT
+            p(6, "生成 SRT 字幕...")
+            srt_name = f"{stem}_translated_{target_lang}.srt"
+            srt_temp = os.path.join(temp_dir, srt_name)
+            srt_output = os.path.join(output_folder, srt_name)
+            self._write_srt(segments, translated, srt_temp)
+            import shutil as _shutil
+            _shutil.copy2(srt_temp, srt_output)
+
+            # Step 7 — TTS 批量合成
+            p(7, "TTS 批量合成...")
+            try:
+                wav_list = asyncio.run(_mcp_tts_batch(translated, ref_voice_path, mcp_url))
+            except Exception as e:
+                self.log(f"    ✗ TTS 失败: {e}")
+                return False
+            if len(wav_list) != len(segments):
+                self.log(f"    ✗ TTS 返回数量不匹配 ({len(wav_list)} vs {len(segments)})")
+                return False
+            for i, wav_bytes in enumerate(wav_list):
+                open(os.path.join(temp_dir, f"tts_seg_{i}.wav"), "wb").write(wav_bytes)
+
+            # Step 8 — 时长对齐
+            p(8, "时长对齐...")
+            for i, seg in enumerate(segments):
+                seg_path = os.path.join(temp_dir, f"tts_seg_{i}.wav")
+                aligned_path = os.path.join(temp_dir, f"tts_aligned_{i}.wav")
+                target_dur = seg["end"] - seg["start"]
+                if not self._align_audio_duration(seg_path, aligned_path, target_dur):
+                    return False
+
+            # Step 9 — 音轨拼接（含段间静音填充）
+            p(9, "音轨拼接...")
+            tts_final = os.path.join(temp_dir, "tts_final.wav")
+            if not self._concat_tts_segments(segments, temp_dir, tts_final):
+                return False
+
+            # Step 10 — 音频混合
+            p(10, "混合背景音乐...")
+            mixed_audio = os.path.join(temp_dir, "mixed_audio.wav")
+            cmd = [
+                self.ffmpeg_path,
+                "-i", tts_final, "-i", no_vocals_path,
+                "-filter_complex", "[0:a][1:a]amix=inputs=2:duration=first:weights=1.5 1",
+                "-y", mixed_audio,
+            ]
+            if not self._run_ffmpeg(cmd, timeout=300):
+                return False
+
+            # Step 11 — 合成输出（SRT→ASS + 替换音轨 + 字幕烧录）
+            p(11, "合成最终视频...")
+            ass_path = os.path.join(temp_dir, "subtitles.ass")
+            self._srt_to_ass(srt_temp, ass_path)
+            out_mp4 = os.path.join(output_folder, f"{stem}_translated_{target_lang}.mp4")
+            # ASS 路径在 Windows 下需转义反斜杠
+            ass_escaped = ass_path.replace("\\", "/").replace(":", "\\:")
+            cmd = [
+                self.ffmpeg_path,
+                "-i", input_path,
+                "-i", mixed_audio,
+                "-map", "0:v:0", "-map", "1:a:0",
+                "-vf", f"ass={ass_escaped}",
+                "-c:v", "libx264",
+                "-preset", "ultrafast" if self.speed_priority.get() else "medium",
+                "-crf", "23",
+                "-c:a", "aac", "-b:a", "192k",
+                "-threads", "0",
+                "-y", out_mp4,
+            ]
+            if not self._run_ffmpeg(cmd, timeout=600):
+                return False
+
+            size_mb = os.path.getsize(out_mp4) / 1024 / 1024
+            self.log(f"    ✓ 输出: {os.path.basename(out_mp4)} ({size_mb:.1f} MB)")
+            return True
+
+        except Exception as e:
+            self.log(f"    ✗ 异常: {e}")
+            return False
+
+    # ── 辅助方法 ──────────────────────────────────────────────
+
+    def _run_ffmpeg(self, cmd: list, timeout: int = 300) -> bool:
+        """执行 ffmpeg 命令并记录错误，成功返回 True。"""
+        try:
+            if sys.platform == 'win32':
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                r = subprocess.run(cmd, capture_output=True, text=True,
+                                   timeout=timeout, startupinfo=si,
+                                   encoding='utf-8', errors='ignore')
+            else:
+                r = subprocess.run(cmd, capture_output=True, text=True,
+                                   timeout=timeout, encoding='utf-8', errors='ignore')
+            if r.returncode == 0:
+                return True
+            self.log(f"    ✗ ffmpeg 错误: {r.stderr[-500:] if r.stderr else '未知'}")
+            return False
+        except Exception as e:
+            self.log(f"    ✗ ffmpeg 异常: {e}")
+            return False
+
+    def _get_audio_duration(self, wav_path: str) -> float:
+        """用 ffprobe 获取音频时长（秒）。失败返回 0.0。"""
+        try:
+            cmd = [
+                self.ffmpeg_path.replace("ffmpeg", "ffprobe").replace("ffmpeg.exe", "ffprobe.exe"),
+                "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", wav_path,
+            ]
+            r = subprocess.run(cmd, capture_output=True, text=True,
+                               encoding='utf-8', errors='ignore', timeout=30)
+            if r.returncode == 0 and r.stdout.strip():
+                return float(r.stdout.strip())
+        except Exception:
+            pass
+        return 0.0
+
+    def _align_audio_duration(self, src: str, dst: str, target_dur: float) -> bool:
+        """将音频对齐到 target_dur 秒（追加静音或加速）。"""
+        actual = self._get_audio_duration(src)
+        if actual <= 0 or target_dur <= 0:
+            import shutil as _sh
+            _sh.copy2(src, dst)
+            return True
+
+        ratio = actual / target_dur
+        if abs(ratio - 1.0) < 0.02:
+            import shutil as _sh
+            _sh.copy2(src, dst)
+            return True
+
+        if ratio < 1.0:
+            # TTS 时长不足：追加静音
+            pad = target_dur - actual
+            cmd = [
+                self.ffmpeg_path,
+                "-i", src,
+                "-f", "lavfi", "-t", str(pad), "-i", "anullsrc=r=44100:cl=stereo",
+                "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1",
+                "-y", dst,
+            ]
+        else:
+            # TTS 时长超出：加速（链式 atempo 处理超范围情况）
+            atempo_chain = self._build_atempo_chain(ratio)
+            cmd = [
+                self.ffmpeg_path,
+                "-i", src,
+                "-filter:a", atempo_chain,
+                "-y", dst,
+            ]
+        return self._run_ffmpeg(cmd, timeout=120)
+
+    def _build_atempo_chain(self, ratio: float) -> str:
+        """构建 atempo 滤镜链（每级范围 [0.5, 2.0]）。"""
+        filters = []
+        remaining = ratio
+        while remaining > 2.0:
+            filters.append("atempo=2.0")
+            remaining /= 2.0
+        while remaining < 0.5:
+            filters.append("atempo=0.5")
+            remaining /= 0.5
+        filters.append(f"atempo={remaining:.6f}")
+        return ",".join(filters)
+
+    def _concat_tts_segments(self, segments: list, temp_dir: str, output: str) -> bool:
+        """拼接所有对齐后的 TTS 片段，段间插入静音填充。"""
+        parts = []
+        for i, seg in enumerate(segments):
+            aligned = os.path.join(temp_dir, f"tts_aligned_{i}.wav")
+            parts.append(aligned)
+            # 段间静音
+            if i < len(segments) - 1:
+                gap = segments[i + 1]["start"] - segments[i]["end"]
+                if gap > 0.01:
+                    silence_path = os.path.join(temp_dir, f"silence_{i}.wav")
+                    cmd = [
+                        self.ffmpeg_path,
+                        "-f", "lavfi",
+                        "-t", f"{gap:.6f}",
+                        "-i", "anullsrc=r=44100:cl=stereo",
+                        "-y", silence_path,
+                    ]
+                    if not self._run_ffmpeg(cmd, timeout=30):
+                        return False
+                    parts.append(silence_path)
+
+        # 写 concat list 文件（使用绝对路径，避免 ffmpeg concat 相对路径二次拼接）
+        list_file = os.path.join(temp_dir, "concat_list.txt")
+        with open(list_file, "w", encoding="utf-8") as f:
+            for p in parts:
+                abs_p = os.path.abspath(p)
+                f.write(f"file '{abs_p.replace(chr(39), chr(39)+'\\'+chr(39)+chr(39))}'\n")
+
+        cmd = [
+            self.ffmpeg_path,
+            "-f", "concat", "-safe", "0",
+            "-i", list_file,
+            "-c", "copy",
+            "-y", output,
+        ]
+        return self._run_ffmpeg(cmd, timeout=300)
+
+    def _write_srt(self, segments: list, translations: list, path: str):
+        """将时间戳和译文写入 SRT 文件。"""
+        def _ts(sec: float) -> str:
+            h = int(sec // 3600)
+            m = int((sec % 3600) // 60)
+            s = int(sec % 60)
+            ms = int(round((sec - int(sec)) * 1000))
+            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+        with open(path, "w", encoding="utf-8") as f:
+            for i, (seg, txt) in enumerate(zip(segments, translations), 1):
+                f.write(f"{i}\n")
+                f.write(f"{_ts(seg['start'])} --> {_ts(seg['end'])}\n")
+                f.write(f"{txt}\n\n")
+
+    def _srt_to_ass(self, srt_path: str, ass_path: str):
+        """将 SRT 转为 ASS，使用默认字幕样式（白色、底部居中、黑色描边）。"""
+        header = (
+            "[Script Info]\n"
+            "ScriptType: v4.00+\n"
+            "PlayResX: 1920\n"
+            "PlayResY: 1080\n\n"
+            "[V4+ Styles]\n"
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+            "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+            "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+            "Alignment, MarginL, MarginR, MarginV, Encoding\n"
+            "Style: Default,Arial,24,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,"
+            "0,0,0,0,100,100,0,0,1,2,0,2,10,10,20,1\n\n"
+            "[Events]\n"
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        )
+
+        def _srt_ts_to_ass(ts: str) -> str:
+            # "00:00:01,234" → "0:00:01.23"
+            ts = ts.strip().replace(",", ".")
+            parts = ts.split(":")
+            h, m, rest = int(parts[0]), int(parts[1]), parts[2]
+            s, ms_str = rest.split(".")
+            ms = int(ms_str[:2]) if len(ms_str) >= 2 else int(ms_str) * 10
+            return f"{h}:{m:02d}:{int(s):02d}.{ms:02d}"
+
+        with open(srt_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        import re
+        blocks = re.split(r"\n\n+", content.strip())
+        events = []
+        for block in blocks:
+            lines = block.strip().splitlines()
+            if len(lines) < 3:
+                continue
+            times = lines[1].split(" --> ")
+            if len(times) != 2:
+                continue
+            start = _srt_ts_to_ass(times[0])
+            end = _srt_ts_to_ass(times[1])
+            text = "\\N".join(lines[2:])
+            events.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}")
+
+        with open(ass_path, "w", encoding="utf-8") as f:
+            f.write(header)
+            f.write("\n".join(events))
+            f.write("\n")
+
+    def _llm_translate(self, texts: list, target_lang: str) -> list:
+        """使用 OpenAI 兼容 API 逐句翻译，失败最多重试 3 次，最终失败保留原文。"""
+        try:
+            import openai
+        except ImportError:
+            self.log("    ✗ 未安装 openai 库，请执行 pip install openai")
+            return texts
+
+        lang_map = {"zh": "中文", "en": "英文"}
+        lang_name = lang_map.get(target_lang, target_lang)
+        client = openai.OpenAI(
+            base_url=self.llm_api_base.get().strip(),
+            api_key=self.llm_api_key.get().strip(),
+        )
+        model = self.llm_model.get().strip()
+        results = []
+        for i, text in enumerate(texts):
+            if not text:
+                results.append(text)
+                continue
+            translated = text
+            for attempt in range(3):
+                try:
+                    resp = client.chat.completions.create(
+                        model=model,
+                        messages=[{
+                            "role": "user",
+                            "content": (
+                                f"将以下文本翻译为{lang_name}，保持原文含义，"
+                                f"只输出译文，不要解释。\n{text}"
+                            ),
+                        }],
+                        temperature=0.3,
+                    )
+                    translated = resp.choices[0].message.content.strip()
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        self.log(f"    ⚠ 第 {i+1} 句翻译失败，保留原文: {e}")
+            results.append(translated)
+        return results
+
+
 def main():
     root = tk.Tk()
     style = ttk.Style()
     style.configure('Accent.TButton', font=('Arial', 10, 'bold'))
-    
+
     app = FFmpegVideoEditorApp(root)
     root.mainloop()
 

@@ -1,13 +1,70 @@
-.venv
-.vscode
-build
-dist
-__pycache__
-*.pyc
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 *.pyo
 *.pyd
-*.pyw
-*.pyz
-*.pywz
-*.pyzw
-*.pyzwz
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 虚拟环境
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# 构建 / 打包
+build/
+dist/
+*.spec
+*.egg
+*.egg-info/
+MANIFEST
+
+# PyInstaller
+*.manifest
+
+# 测试 / 覆盖率
+.tox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+nosetests.xml
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+
+# 系统文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# 日志
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~
+
+# 项目特定
+examples/
+temp/*
