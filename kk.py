@@ -17,6 +17,22 @@ import shutil
 import speech_tab
 import settings_window
 
+APP_TITLE = "中巨量KK智能剪辑工具 v8.2"
+
+VERSION_INFO = """\
+版本：v8.1
+平台：Windows
+
+更新日志：
+• v8.1  填充音乐功能优化，支持智能循环/裁剪精确匹配视频时长
+• v8.0  新增视频翻译（AI 全自动 11 步流程）
+• v7.x  新增视频配音（AI TTS 配音）
+• v6.x  新增填充音乐、画中画、转场拼接
+• v5.x  新增批量旋转/翻转、水印、音量调整
+• v4.x  新增变速/倒放、格式转换、提取帧
+• v1-3  基础合并/分割功能
+"""
+
 
 # ─────────────────────────────────────────────────────────────
 # MCP 异步调用（模块级，通过 asyncio.run() 在 daemon thread 中使用）
@@ -131,7 +147,7 @@ async def _mcp_tts_batch(texts: list, ref_voice_path: str, mcp_url: str) -> list
 class FFmpegVideoEditorApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("智能视频剪辑工具 v8.1 - 填充音乐优化")
+        self.root.title(APP_TITLE)
         self.root.geometry("900x850")
         
         # 控制变量
@@ -282,10 +298,11 @@ class FFmpegVideoEditorApp:
         status_frame.pack(fill='x', padx=10, pady=5)
         ttk.Label(status_frame, text=f"FFmpeg路径: {self.ffmpeg_path}", foreground='green').pack(side='left')
         ttk.Button(status_frame, text="设置", command=lambda: settings_window.open_settings(self)).pack(side='right', padx=5)
-        ttk.Button(status_frame, text="测试FFmpeg", command=self.test_ffmpeg).pack(side='right', padx=5)
+        ttk.Button(status_frame, text="版本说明", command=self._show_version_info).pack(side='right', padx=5)
+        # ttk.Button(status_frame, text="测试FFmpeg", command=self.test_ffmpeg).pack(side='right', padx=5)
         
         # 标题
-        title_label = ttk.Label(self.root, text="智能视频剪辑工具 v8.1 - 填充音乐优化", font=("Arial", 16, "bold"))
+        title_label = ttk.Label(self.root, text=APP_TITLE, font=("Arial", 16, "bold"))
         title_label.pack(pady=10)
         
         # 两行 Tab 按钮栏
@@ -406,6 +423,22 @@ class FFmpegVideoEditorApp:
         self.status_var.set(message)
         self.root.update()
         
+    def _show_version_info(self):
+        """显示版本说明对话框"""
+        win = tk.Toplevel(self.root)
+        win.title("版本说明")
+        win.geometry("420x320")
+        win.resizable(False, False)
+        win.transient(self.root)
+        win.grab_set()
+        ttk.Label(win, text=APP_TITLE, font=("Arial", 13, "bold")).pack(pady=(18, 6))
+        text = tk.Text(win, wrap='word', font=("Arial", 10), relief='flat',
+                       bg=win.cget('bg'), state='normal', height=12)
+        text.insert('1.0', VERSION_INFO)
+        text.config(state='disabled')
+        text.pack(padx=20, fill='both', expand=True)
+        ttk.Button(win, text="关闭", command=win.destroy).pack(pady=10)
+
     def test_ffmpeg(self):
         """测试FFmpeg"""
         self.log("=== 测试FFmpeg ===")
