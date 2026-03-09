@@ -44,7 +44,7 @@ def create_speech_tab(app, parent):
         row=4, column=0, columnspan=3, sticky="w", padx=10, pady=2)
 
     ttk.Button(parent, text="开始配音",
-               command=lambda: start_speech(app)).grid(
+               command=lambda: start_speech(app), style='Accent.TButton').grid(
         row=5, column=0, columnspan=3, pady=15)
 
     parent.columnconfigure(1, weight=1)

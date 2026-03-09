@@ -295,13 +295,13 @@ class FFmpegVideoEditorApp:
         # FFmpeg状态
         status_frame = ttk.Frame(self.root)
         status_frame.pack(fill='x', padx=10, pady=5)
-        ttk.Label(status_frame, text=f"FFmpeg路径: {self.ffmpeg_path}", foreground='green').pack(side='left')
+        # ttk.Label(status_frame, text=f"FFmpeg路径: {self.ffmpeg_path}", foreground='green').pack(side='left')
         ttk.Button(status_frame, text="设置", command=lambda: settings_window.open_settings(self)).pack(side='right', padx=5)
         ttk.Button(status_frame, text="版本说明", command=self._show_version_info).pack(side='right', padx=5)
         # ttk.Button(status_frame, text="测试FFmpeg", command=self.test_ffmpeg).pack(side='right', padx=5)
         
         # 标题
-        title_label = ttk.Label(self.root, text=APP_TITLE, font=("Arial", 16, "bold"))
+        title_label = ttk.Label(self.root, text=APP_TITLE, font=("Microsoft YaHei", 16, "bold"))
         title_label.pack(pady=10)
         
         # 两行 Tab 按钮栏
@@ -363,7 +363,7 @@ class FFmpegVideoEditorApp:
                     relief='raised', bg='#e1e1e1', fg='#1a1a1a',
                     bd=1, padx=8, pady=3, cursor='hand2',
                     font=('微软雅黑', 9),
-                    activebackground='#d0e8ff', activeforeground='#000000',
+                    activebackground='#cce4f7', activeforeground='#003a6e',
                 )
                 btn.pack(side='left', padx=2, pady=2)
                 self._tab_btns[tab_key] = btn
@@ -449,13 +449,16 @@ class FFmpegVideoEditorApp:
         win.resizable(False, False)
         win.transient(self.root)
         win.grab_set()
-        ttk.Label(win, text=APP_TITLE, font=("Arial", 13, "bold")).pack(pady=(18, 6))
-        text = tk.Text(win, wrap='word', font=("Arial", 10), relief='flat',
+        ttk.Label(win, text=APP_TITLE, font=("Microsoft YaHei", 13, "bold")).pack(pady=(18, 6))
+        text = tk.Text(win, wrap='word', font=("Microsoft YaHei", 10), relief='flat',
                        bg=win.cget('bg'), state='normal', height=12)
         text.insert('1.0', VERSION_INFO)
         text.config(state='disabled')
         text.pack(padx=20, fill='both', expand=True)
-        ttk.Button(win, text="关闭", command=win.destroy).pack(pady=10)
+        tk.Button(win, text="关闭", command=win.destroy,
+                  font=("Microsoft YaHei", 10),
+                  cursor='hand2').pack(pady=12)
+
 
     def test_ffmpeg(self):
         """测试FFmpeg"""
@@ -663,7 +666,7 @@ class FFmpegVideoEditorApp:
         for k, btn in self._tab_btns.items():
             btn.config(bg='#e1e1e1', fg='#1a1a1a', relief='raised', font=('微软雅黑', 9))
         self._tab_frames[key].pack(fill='both', expand=True)
-        self._tab_btns[key].config(bg='#ffffff', fg='#000000', relief='flat', font=('微软雅黑', 9, 'bold'))
+        self._tab_btns[key].config(bg='#0078d4', fg='#ffffff', relief='flat', font=('微软雅黑', 9, 'bold'))
         self._active_tab = key
 
     # ===== 标签页创建（原有+新增）=====
@@ -3127,7 +3130,7 @@ class FFmpegVideoEditorApp:
 def main():
     root = tk.Tk()
     style = ttk.Style()
-    style.configure('Accent.TButton', font=('Arial', 10, 'bold'))
+    style.configure('Accent.TButton', font=('Microsoft YaHei', 10, 'bold'))
 
     app = FFmpegVideoEditorApp(root)
     root.mainloop()
