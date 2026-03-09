@@ -245,6 +245,7 @@ class FFmpegVideoEditorApp:
         self.title_output_folder = tk.StringVar()
         self.title_font = tk.StringVar()
         self.title_fontsize = tk.StringVar(value="30")
+        self.title_y_percent = tk.StringVar(value="8")
         self.title_text = tk.StringVar()
 
         # 视频配音变量
@@ -1084,10 +1085,16 @@ class FFmpegVideoEditorApp:
         ttk.Entry(size_frame, textvariable=self.title_fontsize, width=8).pack(side='left')
         ttk.Label(size_frame, text="px", foreground='gray').pack(side='left', padx=5)
 
-        ttk.Label(parent, text="标题文字:").grid(row=4, column=0, sticky='w', padx=10, pady=5)
-        ttk.Entry(parent, textvariable=self.title_text).grid(row=4, column=1, padx=5, sticky='ew')
+        ttk.Label(parent, text="文字高度位置:").grid(row=4, column=0, sticky='w', padx=10, pady=5)
+        ypos_frame = ttk.Frame(parent)
+        ypos_frame.grid(row=4, column=1, padx=5, sticky='w')
+        ttk.Entry(ypos_frame, textvariable=self.title_y_percent, width=8).pack(side='left')
+        ttk.Label(ypos_frame, text="% 距顶部（默认 8%）", foreground='gray').pack(side='left', padx=5)
 
-        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=5, column=0, columnspan=3, pady=15)
+        ttk.Label(parent, text="标题文字:").grid(row=5, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.title_text).grid(row=5, column=1, padx=5, sticky='ew')
+
+        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=6, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
 
     @staticmethod
@@ -1914,6 +1921,10 @@ class FFmpegVideoEditorApp:
                 fontsize = max(10, int(self.title_fontsize.get()))
             except ValueError:
                 fontsize = 30
+            try:
+                y_percent = max(0, min(90, float(self.title_y_percent.get()))) / 100
+            except ValueError:
+                y_percent = 0.08
 
             if not video_folder:
                 messagebox.showerror("错误", "请选择视频文件夹！")
@@ -1958,7 +1969,7 @@ class FFmpegVideoEditorApp:
 
                 self.log(f"\n[{idx}/{len(video_files)}] 处理: {video_file}")
 
-                if self._title_ffmpeg(video_path, output_path, font_path, title_text, fontsize):
+                if self._title_ffmpeg(video_path, output_path, font_path, title_text, fontsize, y_percent):
                     success_count += 1
                     self.log(f"✓ 成功: {output_name}")
                 else:
@@ -1981,8 +1992,8 @@ class FFmpegVideoEditorApp:
         finally:
             self.set_controls_state(False)
 
-    def _title_ffmpeg(self, input_path, output_path, font_path, title_text, fontsize=60):
-        """使用 FFmpeg drawtext 在视频接近顶部居中位置烧录标题文字"""
+    def _title_ffmpeg(self, input_path, output_path, font_path, title_text, fontsize=30, y_percent=0.08):
+        """使用 FFmpeg drawtext 在视频指定高度居中位置烧录标题文字"""
         try:
             # 转义 drawtext 中的特殊字符
             safe_text = title_text.replace("'", "\\'").replace(":", "\\:").replace("\\", "\\\\")
@@ -1993,7 +2004,7 @@ class FFmpegVideoEditorApp:
                 f"drawtext=fontfile='{safe_font}'"
                 f":text='{safe_text}'"
                 f":x=(w-text_w)/2"
-                f":y=h*0.08"
+                f":y=h*{y_percent}"
                 f":fontsize={fontsize}"
                 f":fontcolor=white"
                 f":borderw=3"
