@@ -7,6 +7,8 @@ uv run pyinstaller ^
     --windowed ^
     --add-binary "ffmpeg.exe;." ^
     --add-binary "ffprobe.exe;." ^
+    --add-data "assets\logo.ico;assets" ^
+    --icon "assets\logo.ico" ^
     --name kk ^
     --clean ^
     kk.py

@@ -1,8 +1,18 @@
 import json
+import os
 import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk, messagebox
+from PIL import Image, ImageTk
+
+
+def _resource_path(relative_path: str) -> str:
+    if getattr(sys, 'frozen', False):
+        base = sys._MEIPASS
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, relative_path)
 
 
 def _settings_path() -> Path:
@@ -58,6 +68,19 @@ def open_settings(app):
     rx = app.root.winfo_x() + (app.root.winfo_width() - 480) // 2
     ry = app.root.winfo_y() + (app.root.winfo_height() - 420) // 2
     win.geometry(f"+{rx}+{ry}")
+
+    icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
+    if os.path.exists(icon_path):
+        win.iconbitmap(icon_path)
+
+    header_frame = ttk.Frame(win)
+    header_frame.pack(pady=(12, 0))
+    logo_path = _resource_path(os.path.join('assets', 'logo.png'))
+    if os.path.exists(logo_path):
+        img = Image.open(logo_path).resize((28, 28), Image.LANCZOS)
+        win._logo = ImageTk.PhotoImage(img)
+        ttk.Label(header_frame, image=win._logo).pack(side='left', padx=(0, 6))
+    ttk.Label(header_frame, text="全局设置", font=("Microsoft YaHei", 13, "bold")).pack(side='left')
 
     pad = {"padx": 12, "pady": 6}
 

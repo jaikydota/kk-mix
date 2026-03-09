@@ -12,12 +12,21 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageTk
 import shutil
 import speech_tab
 import settings_window
 
 APP_TITLE = "中巨量KK智能剪辑工具 v8.2"
+
+
+def _resource_path(relative_path: str) -> str:
+    """获取资源文件的绝对路径，兼容开发环境和 PyInstaller 打包后环境。"""
+    if getattr(sys, 'frozen', False):
+        base = sys._MEIPASS
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, relative_path)
 
 VERSION_INFO = """\
 版本：v8.1
@@ -145,6 +154,9 @@ class FFmpegVideoEditorApp:
         self.root = root
         self.root.title(APP_TITLE)
         self.root.geometry("900x850")
+        icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
+        if os.path.exists(icon_path):
+            self.root.iconbitmap(icon_path)
         
         # 控制变量
         self.is_paused = False
@@ -300,9 +312,15 @@ class FFmpegVideoEditorApp:
         ttk.Button(status_frame, text="版本说明", command=self._show_version_info).pack(side='right', padx=5)
         # ttk.Button(status_frame, text="测试FFmpeg", command=self.test_ffmpeg).pack(side='right', padx=5)
         
-        # 标题
-        title_label = ttk.Label(self.root, text=APP_TITLE, font=("Microsoft YaHei", 16, "bold"))
-        title_label.pack(pady=10)
+        # 标题（logo + 文字）
+        title_frame = ttk.Frame(self.root)
+        title_frame.pack(pady=10)
+        logo_path = _resource_path(os.path.join('assets', 'logo.png'))
+        if os.path.exists(logo_path):
+            img = Image.open(logo_path).resize((36, 36), Image.LANCZOS)
+            self._title_logo = ImageTk.PhotoImage(img)
+            ttk.Label(title_frame, image=self._title_logo).pack(side='left', padx=(0, 8))
+        ttk.Label(title_frame, text=APP_TITLE, font=("Microsoft YaHei", 16, "bold")).pack(side='left')
         
         # 两行 Tab 按钮栏
         tab_bar = tk.Frame(self.root, bg='#f0f0f0')
@@ -452,7 +470,17 @@ class FFmpegVideoEditorApp:
         rx = self.root.winfo_x() + (self.root.winfo_width() - w) // 2
         ry = self.root.winfo_y() + (self.root.winfo_height() - h) // 2
         win.geometry(f"{w}x{h}+{rx}+{ry}")
-        ttk.Label(win, text=APP_TITLE, font=("Microsoft YaHei", 13, "bold")).pack(pady=(18, 6))
+        icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
+        if os.path.exists(icon_path):
+            win.iconbitmap(icon_path)
+        title_frame = ttk.Frame(win)
+        title_frame.pack(pady=(18, 6))
+        logo_path = _resource_path(os.path.join('assets', 'logo.png'))
+        if os.path.exists(logo_path):
+            img = Image.open(logo_path).resize((28, 28), Image.LANCZOS)
+            win._logo = ImageTk.PhotoImage(img)
+            ttk.Label(title_frame, image=win._logo).pack(side='left', padx=(0, 6))
+        ttk.Label(title_frame, text=APP_TITLE, font=("Microsoft YaHei", 13, "bold")).pack(side='left')
         text = tk.Text(win, wrap='word', font=("Microsoft YaHei", 10), relief='flat',
                        bg=win.cget('bg'), state='normal', height=12)
         text.insert('1.0', VERSION_INFO)
