@@ -176,7 +176,7 @@ class FFmpegVideoEditorApp:
         self.concat_folder_widgets = []  # track dynamic UI rows
         self.concat_output = tk.StringVar()
         self.concat_transition = tk.DoubleVar(value=0.5)
-        self.concat_transition_type = tk.StringVar(value='fade')
+        self.concat_transition_type = tk.StringVar(value='淡入淡出-fade')
         
         # 画中画变量
         self.pip_bg_folder = tk.StringVar()
@@ -789,15 +789,15 @@ class FFmpegVideoEditorApp:
 
         ttk.Label(transition_frame, text="转场类型:").pack(side='left', padx=5)
         transition_types = [
-            'fade', 'fadeblack', 'fadewhite',
-            'wipeleft', 'wiperight', 'wipeup', 'wipedown',
-            'slideleft', 'slideright', 'slideup', 'slidedown',
-            'smoothleft', 'smoothright', 'smoothup', 'smoothdown',
-            'circleopen', 'circleclose', 'radial', 'dissolve', 'pixelize',
+            '淡入淡出-fade', '淡入黑场-fadeblack', '淡入白场-fadewhite',
+            '向左擦除-wipeleft', '向右擦除-wiperight', '向上擦除-wipeup', '向下擦除-wipedown',
+            '向左滑动-slideleft', '向右滑动-slideright', '向上滑动-slideup', '向下滑动-slidedown',
+            '向左平滑-smoothleft', '向右平滑-smoothright', '向上平滑-smoothup', '向下平滑-smoothdown',
+            '圆形展开-circleopen', '圆形收缩-circleclose', '径向扫描-radial', '溶解-dissolve', '像素化-pixelize',
         ]
         ttk.Combobox(
             transition_frame, textvariable=self.concat_transition_type,
-            values=transition_types, width=14, state='readonly'
+            values=transition_types, width=20, state='readonly'
         ).pack(side='left', padx=5)
 
         ttk.Button(parent, text="开始转场拼接", command=self.start_concat, style='Accent.TButton').grid(row=3, column=0, columnspan=3, pady=15)
@@ -2390,7 +2390,8 @@ class FFmpegVideoEditorApp:
 
             n = len(video_paths)
             td = self.concat_transition.get()
-            transition_type = self.concat_transition_type.get() or 'fade'
+            _tt_raw = self.concat_transition_type.get() or '淡入淡出-fade'
+            transition_type = _tt_raw.split('-')[-1] if '-' in _tt_raw else _tt_raw
             preset = 'ultrafast' if self.speed_priority.get() else 'medium'
 
             si = None
