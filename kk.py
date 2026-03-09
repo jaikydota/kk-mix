@@ -19,7 +19,6 @@ import settings_window
 
 APP_TITLE = "中巨量KK智能剪辑工具 v8.2"
 
-
 def _resource_path(relative_path: str) -> str:
     """获取资源文件的绝对路径，兼容开发环境和 PyInstaller 打包后环境。"""
     if getattr(sys, 'frozen', False):
@@ -29,11 +28,11 @@ def _resource_path(relative_path: str) -> str:
     return os.path.join(base, relative_path)
 
 VERSION_INFO = """\
-版本：v8.1
+版本：v8.2
 平台：Windows
 
 更新日志：
-• v8.2  增加视频Title功能
+• v8.2  增加视频添加标题功能，部分BUG修复
 • v8.1  填充音乐功能优化，支持智能循环/裁剪精确匹配视频时长
 • v1-8  基础合并/分割功能等
 """
@@ -1072,7 +1071,11 @@ class FFmpegVideoEditorApp:
         font_cb.grid(row=2, column=1, padx=5, sticky='ew')
         font_cb['values'] = self._get_system_fonts()
         if font_cb['values']:
-            self.title_font.set(font_cb['values'][0])
+            names = font_cb['values']
+            # 优先选微软雅黑，其次任意含中文名的字体，最后取第一个
+            msyh = next((n for n in names if '微软雅黑' in n), None)
+            chinese = next((n for n in names if self._label_has_chinese(n)), None)
+            self.title_font.set(msyh or chinese or names[0])
         ttk.Button(parent, text="刷新", command=lambda: self._refresh_title_fonts(font_cb)).grid(row=2, column=2, padx=5)
 
         ttk.Label(parent, text="字体大小:").grid(row=3, column=0, sticky='w', padx=10, pady=5)
@@ -1087,8 +1090,15 @@ class FFmpegVideoEditorApp:
         ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=5, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
 
+    @staticmethod
+    def _label_has_chinese(s):
+        """判断字符串是否含有中文字符。"""
+        return any('\u4e00' <= c <= '\u9fff' or '\u3400' <= c <= '\u4dbf' for c in s)
+
     def _get_system_fonts(self):
-        """从 Windows 注册表读取字体显示名（含中文名称），映射到字体文件路径。"""
+        """从 Windows 注册表读取字体显示名（含中文名称），映射到字体文件路径。
+        返回列表顺序：含中文名的字体在前（按名称排序），其余在后（按名称排序）。
+        """
         import winreg
         fonts_dir = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "Fonts")
         font_map = {}
@@ -1104,19 +1114,19 @@ class FFmpegVideoEditorApp:
                     i += 1
                     font_path = filename if os.path.isabs(filename) else os.path.join(fonts_dir, filename)
                     if os.path.exists(font_path) and Path(font_path).suffix.lower() in ('.ttf', '.otf', '.ttc'):
-                        # 去掉末尾的 "(TrueType)" / "(OpenType)" 等括注
                         label = display_name.replace(" (TrueType)", "").replace(" (OpenType)", "").strip()
                         font_map[label] = font_path
                 except OSError:
                     break
             winreg.CloseKey(reg_key)
         except Exception:
-            # 注册表读取失败时回退到扫描目录
             for fname in sorted(os.listdir(fonts_dir)):
                 if fname.lower().endswith(('.ttf', '.otf', '.ttc')):
                     font_map[Path(fname).stem] = os.path.join(fonts_dir, fname)
         self._title_font_map = font_map
-        return sorted(font_map.keys())
+        chinese_names = sorted(k for k in font_map if self._label_has_chinese(k))
+        other_names   = sorted(k for k in font_map if not self._label_has_chinese(k))
+        return chinese_names + other_names
 
     def _refresh_title_fonts(self, combobox):
         """刷新字体列表"""
