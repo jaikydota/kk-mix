@@ -59,7 +59,7 @@ def open_settings(app):
     """打开全局设置窗口"""
     win = tk.Toplevel(app.root)
     win.title("全局设置")
-    win.geometry("480x420")
+    win.geometry("480x450")
     win.resizable(False, False)
     win.grab_set()  # 模态
 

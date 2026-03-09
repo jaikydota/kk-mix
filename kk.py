@@ -241,6 +241,13 @@ class FFmpegVideoEditorApp:
         self.music_output_folder = tk.StringVar()
         self.music_keep_original_audio = tk.BooleanVar(value=False)
 
+        # 视频添加标题
+        self.title_video_folder = tk.StringVar()
+        self.title_output_folder = tk.StringVar()
+        self.title_font = tk.StringVar()
+        self.title_fontsize = tk.StringVar(value="30")
+        self.title_text = tk.StringVar()
+
         # 视频配音变量
         self.speech_video_folder = tk.StringVar()
         self.speech_text_folder = tk.StringVar()
@@ -348,9 +355,10 @@ class FFmpegVideoEditorApp:
         ]
         # 从"填充音乐"开始放第二层，后续新增功能也加在这里
         ROW2 = [
-            ("填充音乐",  "music"),
-            ("视频配音",  "speech"),
-            ("视频翻译",  "translate"),
+            ("填充音乐",    "music"),
+            ("视频添加标题", "title"),
+            ("视频配音",    "speech"),
+            ("视频翻译",    "translate"),
         ]
         CREATE_MAP = {
             "merge":     self.create_merge_tab,
@@ -364,6 +372,7 @@ class FFmpegVideoEditorApp:
             "convert":   self.create_convert_tab,
             "extract":   self.create_extract_tab,
             "music":     self.create_music_tab,
+            "title":     self.create_title_tab,
             "speech":    lambda f: speech_tab.create_speech_tab(self, f),
             "translate": self.create_translate_tab,
         }
@@ -1047,7 +1056,75 @@ class FFmpegVideoEditorApp:
         
         ttk.Button(parent, text="开始填充音乐", command=self.start_music, style='Accent.TButton').grid(row=4, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
-        
+
+    def create_title_tab(self, parent):
+        """创建视频添加标题标签页"""
+        ttk.Label(parent, text="视频文件夹:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.title_video_folder).grid(row=0, column=1, padx=5, sticky='ew')
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.title_video_folder)).grid(row=0, column=2, padx=5)
+
+        ttk.Label(parent, text="输出文件夹:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.title_output_folder).grid(row=1, column=1, padx=5, sticky='ew')
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.title_output_folder, True)).grid(row=1, column=2, padx=5)
+
+        ttk.Label(parent, text="选择字体:").grid(row=2, column=0, sticky='w', padx=10, pady=5)
+        font_cb = ttk.Combobox(parent, textvariable=self.title_font, state='readonly')
+        font_cb.grid(row=2, column=1, padx=5, sticky='ew')
+        font_cb['values'] = self._get_system_fonts()
+        if font_cb['values']:
+            self.title_font.set(font_cb['values'][0])
+        ttk.Button(parent, text="刷新", command=lambda: self._refresh_title_fonts(font_cb)).grid(row=2, column=2, padx=5)
+
+        ttk.Label(parent, text="字体大小:").grid(row=3, column=0, sticky='w', padx=10, pady=5)
+        size_frame = ttk.Frame(parent)
+        size_frame.grid(row=3, column=1, padx=5, sticky='w')
+        ttk.Entry(size_frame, textvariable=self.title_fontsize, width=8).pack(side='left')
+        ttk.Label(size_frame, text="px", foreground='gray').pack(side='left', padx=5)
+
+        ttk.Label(parent, text="标题文字:").grid(row=4, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.title_text).grid(row=4, column=1, padx=5, sticky='ew')
+
+        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=5, column=0, columnspan=3, pady=15)
+        parent.columnconfigure(1, weight=1)
+
+    def _get_system_fonts(self):
+        """从 Windows 注册表读取字体显示名（含中文名称），映射到字体文件路径。"""
+        import winreg
+        fonts_dir = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "Fonts")
+        font_map = {}
+        try:
+            reg_key = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
+            )
+            i = 0
+            while True:
+                try:
+                    display_name, filename, _ = winreg.EnumValue(reg_key, i)
+                    i += 1
+                    font_path = filename if os.path.isabs(filename) else os.path.join(fonts_dir, filename)
+                    if os.path.exists(font_path) and Path(font_path).suffix.lower() in ('.ttf', '.otf', '.ttc'):
+                        # 去掉末尾的 "(TrueType)" / "(OpenType)" 等括注
+                        label = display_name.replace(" (TrueType)", "").replace(" (OpenType)", "").strip()
+                        font_map[label] = font_path
+                except OSError:
+                    break
+            winreg.CloseKey(reg_key)
+        except Exception:
+            # 注册表读取失败时回退到扫描目录
+            for fname in sorted(os.listdir(fonts_dir)):
+                if fname.lower().endswith(('.ttf', '.otf', '.ttc')):
+                    font_map[Path(fname).stem] = os.path.join(fonts_dir, fname)
+        self._title_font_map = font_map
+        return sorted(font_map.keys())
+
+    def _refresh_title_fonts(self, combobox):
+        """刷新字体列表"""
+        values = self._get_system_fonts()
+        combobox['values'] = values
+        if values and not self.title_font.get():
+            self.title_font.set(values[0])
+
     # ===== 启动方法（新增）=====
     
     def start_rotate(self):
@@ -1079,7 +1156,12 @@ class FFmpegVideoEditorApp:
         thread = threading.Thread(target=self.batch_music_operation)
         thread.daemon = True
         thread.start()
-    
+
+    def start_title(self):
+        thread = threading.Thread(target=self.batch_title_operation)
+        thread.daemon = True
+        thread.start()
+
     # ===== 新增功能实现 =====
     
     def batch_rotate_operation(self):
@@ -1805,6 +1887,133 @@ class FFmpegVideoEditorApp:
             
         except Exception as e:
             self.log(f"    ✗ 合并异常: {str(e)}")
+            return False
+
+    def batch_title_operation(self):
+        """批量为视频添加标题文字"""
+        self.current_operation = "title"
+        self.set_controls_state(True)
+        self.progress_var.set(0)
+
+        try:
+            video_folder = self.title_video_folder.get()
+            output_folder = self.title_output_folder.get().strip()
+            font_name = self.title_font.get()
+            title_text = self.title_text.get().strip()
+            try:
+                fontsize = max(10, int(self.title_fontsize.get()))
+            except ValueError:
+                fontsize = 30
+
+            if not video_folder:
+                messagebox.showerror("错误", "请选择视频文件夹！")
+                return
+            if not font_name:
+                messagebox.showerror("错误", "请选择字体！")
+                return
+            if not title_text:
+                messagebox.showerror("错误", "请输入标题文字！")
+                return
+
+            font_path = getattr(self, '_title_font_map', {}).get(font_name)
+            if not font_path or not os.path.exists(font_path):
+                messagebox.showerror("错误", f"找不到字体文件：{font_name}")
+                return
+
+            video_files = self.get_video_files(video_folder)
+            if not video_files:
+                messagebox.showerror("错误", "文件夹中没有找到视频文件！")
+                return
+
+            if not output_folder:
+                output_folder = os.path.join(video_folder, "title_output")
+            os.makedirs(output_folder, exist_ok=True)
+
+            self.log(f"\n{'='*60}")
+            self.log(f"开始批量添加标题")
+            self.log(f"视频数: {len(video_files)} 个")
+            self.log(f"标题: {title_text}")
+            self.log(f"字体: {font_name}")
+            self.log(f"{'='*60}\n")
+
+            success_count = 0
+
+            for idx, video_file in enumerate(video_files, 1):
+                if self.check_pause_stop():
+                    break
+
+                video_path = os.path.join(video_folder, video_file)
+                output_name = f"title_{idx:03d}_{Path(video_file).stem}.mp4"
+                output_path = os.path.join(output_folder, output_name)
+
+                self.log(f"\n[{idx}/{len(video_files)}] 处理: {video_file}")
+
+                if self._title_ffmpeg(video_path, output_path, font_path, title_text, fontsize):
+                    success_count += 1
+                    self.log(f"✓ 成功: {output_name}")
+                else:
+                    self.log(f"✗ 失败: {video_file}")
+
+                self.progress_var.set((idx / len(video_files)) * 100)
+                self.update_status(f"添加标题中... {idx}/{len(video_files)}")
+
+            self.log(f"\n{'='*60}")
+            self.log(f"完成！成功处理 {success_count}/{len(video_files)} 个视频")
+            self.log(f"输出目录: {output_folder}")
+            self.log(f"{'='*60}")
+
+            if success_count > 0:
+                messagebox.showinfo("完成", f"成功处理 {success_count} 个视频！\n输出目录: {output_folder}")
+
+        except Exception as e:
+            messagebox.showerror("错误", f"添加标题失败: {str(e)}")
+            self.log(f"✗ 错误: {str(e)}")
+        finally:
+            self.set_controls_state(False)
+
+    def _title_ffmpeg(self, input_path, output_path, font_path, title_text, fontsize=60):
+        """使用 FFmpeg drawtext 在视频接近顶部居中位置烧录标题文字"""
+        try:
+            # 转义 drawtext 中的特殊字符
+            safe_text = title_text.replace("'", "\\'").replace(":", "\\:").replace("\\", "\\\\")
+            # 字体路径在 Windows 下反斜杠需转义
+            safe_font = font_path.replace("\\", "/").replace(":", "\\:")
+
+            drawtext = (
+                f"drawtext=fontfile='{safe_font}'"
+                f":text='{safe_text}'"
+                f":x=(w-text_w)/2"
+                f":y=h*0.08"
+                f":fontsize={fontsize}"
+                f":fontcolor=white"
+                f":borderw=3"
+                f":bordercolor=black@0.7"
+                f":shadowx=2:shadowy=2:shadowcolor=black@0.5"
+            )
+
+            cmd = [
+                self.ffmpeg_path,
+                '-i', input_path,
+                '-vf', drawtext,
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-c:a', 'copy',
+                '-y',
+                output_path
+            ]
+
+            result = self._run_cmd(cmd, timeout=600)
+
+            if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                size_mb = os.path.getsize(output_path) / 1024 / 1024
+                self.log(f"    ✓ 完成: {os.path.basename(output_path)} ({size_mb:.1f} MB)")
+                return True
+            else:
+                self.log(f"    ✗ 失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
+                return False
+
+        except Exception as e:
+            self.log(f"    ✗ 异常: {str(e)}")
             return False
 
     # ===== 原有功能实现（包含修复）=====
