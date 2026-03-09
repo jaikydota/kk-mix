@@ -251,6 +251,9 @@ class FFmpegVideoEditorApp:
         self.llm_api_key = tk.StringVar()
         self.llm_model = tk.StringVar(value="gpt-4o")
 
+        # 调试
+        self.verbose_log = tk.BooleanVar(value=False)
+
         # 支持的文件类型
         self.video_extensions = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm'}
         self.image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
@@ -417,6 +420,25 @@ class FFmpegVideoEditorApp:
             self.log_text.insert('end', f"[{timestamp}] {message}\n")
             self.log_text.see('end')
             self.root.update()
+
+    def _run_cmd(self, cmd: list, timeout: int = 600):
+        """统一执行子进程命令，支持详细日志。返回 CompletedProcess 对象。"""
+        if self.verbose_log.get():
+            self.log(f"[CMD] {' '.join(str(x) for x in cmd)}")
+        if sys.platform == 'win32':
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                    timeout=timeout, startupinfo=si,
+                                    encoding='utf-8', errors='ignore')
+        else:
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                    timeout=timeout, encoding='utf-8', errors='ignore')
+        if self.verbose_log.get() and result.stderr:
+            for line in result.stderr.splitlines():
+                if line.strip():
+                    self.log(f"[FFmpeg] {line}")
+        return result
             
     def update_status(self, message):
         """更新状态栏"""
@@ -554,14 +576,7 @@ class FFmpegVideoEditorApp:
             ffprobe_path = self.ffmpeg_path.replace('ffmpeg', 'ffprobe')
             if os.path.exists(ffprobe_path) or shutil.which(ffprobe_path):
                 ffprobe_cmd = [ffprobe_path, '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', video_path]
-                if sys.platform == 'win32':
-                    startupinfo = subprocess.STARTUPINFO()
-                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                    result = subprocess.run(ffprobe_cmd, capture_output=True, text=True, timeout=30, 
-                                           startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-                else:
-                    result = subprocess.run(ffprobe_cmd, capture_output=True, text=True, timeout=30,
-                                           encoding='utf-8', errors='ignore')
+                result = self._run_cmd(ffprobe_cmd, timeout=30)
                 
                 if result.returncode == 0 and result.stdout.strip():
                     duration = float(result.stdout.strip())
@@ -570,14 +585,7 @@ class FFmpegVideoEditorApp:
             
             # 备用方法: 使用ffmpeg -i
             cmd = [self.ffmpeg_path, '-i', video_path]
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=30)
             
             output_text = (result.stdout or '') + '\n' + (result.stderr or '')
             
@@ -613,14 +621,7 @@ class FFmpegVideoEditorApp:
                     '-of', 'default=noprint_wrappers=1:nokey=1',
                     video_path,
                 ]
-                if sys.platform == 'win32':
-                    si = subprocess.STARTUPINFO()
-                    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
-                                       startupinfo=si, encoding='utf-8', errors='ignore')
-                else:
-                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
-                                       encoding='utf-8', errors='ignore')
+                r = self._run_cmd(cmd, timeout=30)
                 if r.returncode == 0 and r.stdout.strip():
                     return float(r.stdout.strip())
             except Exception:
@@ -629,14 +630,7 @@ class FFmpegVideoEditorApp:
         # ffprobe 不可用时，用 ffmpeg -i 解析 stderr
         try:
             cmd = [self.ffmpeg_path, '-i', video_path]
-            if sys.platform == 'win32':
-                si = subprocess.STARTUPINFO()
-                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
-                                   startupinfo=si, encoding='utf-8', errors='ignore')
-            else:
-                r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
-                                   encoding='utf-8', errors='ignore')
+            r = self._run_cmd(cmd, timeout=30)
             import re
             m = re.search(r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)', r.stderr)
             if m:
@@ -650,14 +644,7 @@ class FFmpegVideoEditorApp:
         """获取视频分辨率"""
         try:
             cmd = [self.ffmpeg_path, '-i', video_path, '-f', 'null', '-']
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=30)
             
             for line in result.stderr.split('\n'):
                 if 'Stream #0:0' in line and 'Video:' in line:
@@ -1160,14 +1147,7 @@ class FFmpegVideoEditorApp:
                 output_path
             ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=600)
             
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 file_size_mb = os.path.getsize(output_path) / 1024 / 1024
@@ -1305,14 +1285,7 @@ class FFmpegVideoEditorApp:
                 output_path
             ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=600)
             
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 file_size_mb = os.path.getsize(output_path) / 1024 / 1024
@@ -1404,14 +1377,7 @@ class FFmpegVideoEditorApp:
                 output_path
             ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=300)
             
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 file_size_mb = os.path.getsize(output_path) / 1024 / 1024
@@ -1520,14 +1486,7 @@ class FFmpegVideoEditorApp:
                 output_path
             ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=600)
             
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 file_size_mb = os.path.getsize(output_path) / 1024 / 1024
@@ -1624,14 +1583,7 @@ class FFmpegVideoEditorApp:
                 output_pattern
             ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=600)
             
             # 计算提取的帧数
             if result.returncode == 0:
@@ -1769,14 +1721,7 @@ class FFmpegVideoEditorApp:
                 output_path
             ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=300)
             
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 self.log(f"    ✓ 音频提取成功")
@@ -1820,14 +1765,7 @@ class FFmpegVideoEditorApp:
                     output_path
                 ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=600)
             
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 file_size_mb = os.path.getsize(output_path) / 1024 / 1024
@@ -2094,14 +2032,7 @@ class FFmpegVideoEditorApp:
             
             self.log(f"    执行: ffmpeg -i ... -ss {start_time} -t {duration}")
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=300)
             
             if result.returncode != 0:
                 error_msg = result.stderr[-500:] if result.stderr else "未知错误"
@@ -2136,14 +2067,7 @@ class FFmpegVideoEditorApp:
                 output_path
             ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=300)
             
             return result.returncode == 0 and os.path.exists(output_path)
             
@@ -2226,14 +2150,7 @@ class FFmpegVideoEditorApp:
                 return self._merge_with_moviepy_safe(file1_path, file2_path, output_path, image_duration)
             
             # 执行FFmpeg
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=600)
             
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 file_size_mb = os.path.getsize(output_path) / 1024 / 1024
@@ -2394,16 +2311,8 @@ class FFmpegVideoEditorApp:
             transition_type = _tt_raw.split('-')[-1] if '-' in _tt_raw else _tt_raw
             preset = 'ultrafast' if self.speed_priority.get() else 'medium'
 
-            si = None
-            if sys.platform == 'win32':
-                si = subprocess.STARTUPINFO()
-                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-
             def run_cmd(cmd):
-                return subprocess.run(
-                    cmd, capture_output=True, text=True, timeout=900,
-                    startupinfo=si, encoding='utf-8', errors='ignore'
-                )
+                return self._run_cmd(cmd, timeout=900)
 
             # 构建公共输入参数
             inputs = []
@@ -2598,14 +2507,7 @@ class FFmpegVideoEditorApp:
                 output_path
             ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=600)
             
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 file_size_mb = os.path.getsize(output_path) / 1024 / 1024
@@ -2721,14 +2623,7 @@ class FFmpegVideoEditorApp:
                 output_path
             ]
             
-            if sys.platform == 'win32':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, 
-                                       startupinfo=startupinfo, encoding='utf-8', errors='ignore')
-            else:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600,
-                                       encoding='utf-8', errors='ignore')
+            result = self._run_cmd(cmd, timeout=600)
             
             if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                 file_size_mb = os.path.getsize(output_path) / 1024 / 1024
@@ -3009,15 +2904,7 @@ class FFmpegVideoEditorApp:
     def _run_ffmpeg(self, cmd: list, timeout: int = 300) -> bool:
         """执行 ffmpeg 命令并记录错误，成功返回 True。"""
         try:
-            if sys.platform == 'win32':
-                si = subprocess.STARTUPINFO()
-                si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                r = subprocess.run(cmd, capture_output=True, text=True,
-                                   timeout=timeout, startupinfo=si,
-                                   encoding='utf-8', errors='ignore')
-            else:
-                r = subprocess.run(cmd, capture_output=True, text=True,
-                                   timeout=timeout, encoding='utf-8', errors='ignore')
+            r = self._run_cmd(cmd, timeout=timeout)
             if r.returncode == 0:
                 return True
             self.log(f"    ✗ ffmpeg 错误: {r.stderr[-500:] if r.stderr else '未知'}")
@@ -3034,8 +2921,7 @@ class FFmpegVideoEditorApp:
                 "-v", "error", "-show_entries", "format=duration",
                 "-of", "default=noprint_wrappers=1:nokey=1", wav_path,
             ]
-            r = subprocess.run(cmd, capture_output=True, text=True,
-                               encoding='utf-8', errors='ignore', timeout=30)
+            r = self._run_cmd(cmd, timeout=30)
             if r.returncode == 0 and r.stdout.strip():
                 return float(r.stdout.strip())
         except Exception:

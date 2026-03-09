@@ -26,6 +26,7 @@ def load_settings(app):
         app.llm_api_base.set(data.get("llm_api_base", "https://api.openai.com/v1"))
         app.llm_api_key.set(data.get("llm_api_key", ""))
         app.llm_model.set(data.get("llm_model", "gpt-4o"))
+        app.verbose_log.set(data.get("verbose_log", False))
     except Exception:
         pass
 
@@ -38,6 +39,7 @@ def _save_settings(app):
         "llm_api_base": app.llm_api_base.get(),
         "llm_api_key": app.llm_api_key.get(),
         "llm_model": app.llm_model.get(),
+        "verbose_log": app.verbose_log.get(),
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -47,14 +49,14 @@ def open_settings(app):
     """打开全局设置窗口"""
     win = tk.Toplevel(app.root)
     win.title("全局设置")
-    win.geometry("480x360")
+    win.geometry("480x420")
     win.resizable(False, False)
     win.grab_set()  # 模态
 
     # 使窗口居中于主窗口
     app.root.update_idletasks()
     rx = app.root.winfo_x() + (app.root.winfo_width() - 480) // 2
-    ry = app.root.winfo_y() + (app.root.winfo_height() - 360) // 2
+    ry = app.root.winfo_y() + (app.root.winfo_height() - 420) // 2
     win.geometry(f"+{rx}+{ry}")
 
     pad = {"padx": 12, "pady": 6}
@@ -95,6 +97,16 @@ def open_settings(app):
         row=2, column=1, padx=5, pady=6, sticky="ew"
     )
     llm_section.columnconfigure(1, weight=1)
+
+    # ── 调试选项 ──────────────────────────────────
+    debug_section = ttk.LabelFrame(win, text="调试选项", padding=10)
+    debug_section.pack(fill="x", padx=15, pady=(0, 8))
+
+    ttk.Checkbutton(
+        debug_section,
+        text="打印详细日志",
+        variable=app.verbose_log,
+    ).grid(row=0, column=0, sticky="w", padx=12, pady=4)
 
     # ── 按钮区 ────────────────────────────────────
     btn_frame = ttk.Frame(win)
