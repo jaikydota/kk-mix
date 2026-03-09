@@ -445,19 +445,20 @@ class FFmpegVideoEditorApp:
         """显示版本说明对话框"""
         win = tk.Toplevel(self.root)
         win.title("版本说明")
-        win.geometry("420x320")
         win.resizable(False, False)
         win.transient(self.root)
         win.grab_set()
+        w, h = 420, 400
+        rx = self.root.winfo_x() + (self.root.winfo_width() - w) // 2
+        ry = self.root.winfo_y() + (self.root.winfo_height() - h) // 2
+        win.geometry(f"{w}x{h}+{rx}+{ry}")
         ttk.Label(win, text=APP_TITLE, font=("Microsoft YaHei", 13, "bold")).pack(pady=(18, 6))
         text = tk.Text(win, wrap='word', font=("Microsoft YaHei", 10), relief='flat',
                        bg=win.cget('bg'), state='normal', height=12)
         text.insert('1.0', VERSION_INFO)
         text.config(state='disabled')
         text.pack(padx=20, fill='both', expand=True)
-        tk.Button(win, text="关闭", command=win.destroy,
-                  font=("Microsoft YaHei", 10),
-                  cursor='hand2').pack(pady=12)
+        ttk.Button(win, text="  关闭  ", command=win.destroy).pack(pady=10)
 
 
     def test_ffmpeg(self):
