@@ -17,7 +17,8 @@ import shutil
 import speech_tab
 import settings_window
 
-APP_TITLE = "中巨量KK智能剪辑工具 v8.2"
+VERSION = "v8.2.1"
+APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
     """获取资源文件的绝对路径，兼容开发环境和 PyInstaller 打包后环境。"""
@@ -27,8 +28,8 @@ def _resource_path(relative_path: str) -> str:
         base = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base, relative_path)
 
-VERSION_INFO = """\
-版本：v8.2
+VERSION_INFO = f"""\
+版本：{VERSION}
 平台：Windows
 
 更新日志：
@@ -1078,23 +1079,25 @@ class FFmpegVideoEditorApp:
             chinese = next((n for n in names if self._label_has_chinese(n)), None)
             self.title_font.set(msyh or chinese or names[0])
         ttk.Button(parent, text="刷新", command=lambda: self._refresh_title_fonts(font_cb)).grid(row=2, column=2, padx=5)
+        ttk.Label(parent, text="💡 如果标题文字是中文，请尽量选择含中文名称的系统字体，防止显示乱码",
+                  foreground='gray').grid(row=3, column=0, columnspan=3, sticky='w', padx=12, pady=(0, 4))
 
-        ttk.Label(parent, text="字体大小:").grid(row=3, column=0, sticky='w', padx=10, pady=5)
+        ttk.Label(parent, text="字体大小:").grid(row=4, column=0, sticky='w', padx=10, pady=5)
         size_frame = ttk.Frame(parent)
-        size_frame.grid(row=3, column=1, padx=5, sticky='w')
+        size_frame.grid(row=4, column=1, padx=5, sticky='w')
         ttk.Entry(size_frame, textvariable=self.title_fontsize, width=8).pack(side='left')
         ttk.Label(size_frame, text="px", foreground='gray').pack(side='left', padx=5)
 
-        ttk.Label(parent, text="文字高度位置:").grid(row=4, column=0, sticky='w', padx=10, pady=5)
+        ttk.Label(parent, text="文字高度位置:").grid(row=5, column=0, sticky='w', padx=10, pady=5)
         ypos_frame = ttk.Frame(parent)
-        ypos_frame.grid(row=4, column=1, padx=5, sticky='w')
+        ypos_frame.grid(row=5, column=1, padx=5, sticky='w')
         ttk.Entry(ypos_frame, textvariable=self.title_y_percent, width=8).pack(side='left')
         ttk.Label(ypos_frame, text="% 距顶部（默认 8%）", foreground='gray').pack(side='left', padx=5)
 
-        ttk.Label(parent, text="标题文字:").grid(row=5, column=0, sticky='w', padx=10, pady=5)
-        ttk.Entry(parent, textvariable=self.title_text).grid(row=5, column=1, padx=5, sticky='ew')
+        ttk.Label(parent, text="标题文字:").grid(row=6, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.title_text).grid(row=6, column=1, padx=5, sticky='ew')
 
-        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=6, column=0, columnspan=3, pady=15)
+        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=7, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
 
     @staticmethod
@@ -1976,7 +1979,7 @@ class FFmpegVideoEditorApp:
                         self.log(f"✗ 字体加载失败，终止批处理")
                         messagebox.showerror(
                             "字体失效",
-                            f"当前系统字体「{Path(font_path).stem}」在本机无法加载。\n\n请更换字体后重试。"
+                            f"当前系统字体「{Path(font_path).stem}」无法正常加载。\n\n请更换字体后重试。"
                         )
                         break
                     raise
