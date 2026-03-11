@@ -1969,11 +1969,23 @@ class FFmpegVideoEditorApp:
 
                 self.log(f"\n[{idx}/{len(video_files)}] 处理: {video_file}")
 
-                if self._title_ffmpeg(video_path, output_path, font_path, title_text, fontsize, y_percent):
-                    success_count += 1
-                    self.log(f"✓ 成功: {output_name}")
+                try:
+                    ok = self._title_ffmpeg(video_path, output_path, font_path, title_text, fontsize, y_percent)
+                except RuntimeError as e:
+                    if "__font_error__" in str(e):
+                        self.log(f"✗ 字体加载失败，终止批处理")
+                        messagebox.showerror(
+                            "字体失效",
+                            f"当前系统字体「{Path(font_path).stem}」在本机无法加载。\n\n请更换字体后重试。"
+                        )
+                        break
+                    raise
                 else:
-                    self.log(f"✗ 失败: {video_file}")
+                    if ok:
+                        success_count += 1
+                        self.log(f"✓ 成功: {output_name}")
+                    else:
+                        self.log(f"✗ 失败: {video_file}")
 
                 self.progress_var.set((idx / len(video_files)) * 100)
                 self.update_status(f"添加标题中... {idx}/{len(video_files)}")
@@ -2030,9 +2042,14 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 完成: {os.path.basename(output_path)} ({size_mb:.1f} MB)")
                 return True
             else:
-                self.log(f"    ✗ 失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
+                stderr_text = result.stderr or ""
+                if "Fontconfig error" in stderr_text or "Cannot load default config file" in stderr_text:
+                    raise RuntimeError("__font_error__")
+                self.log(f"    ✗ 失败: {stderr_text[-500:] if stderr_text else '未知错误'}")
                 return False
 
+        except RuntimeError:
+            raise
         except Exception as e:
             self.log(f"    ✗ 异常: {str(e)}")
             return False
