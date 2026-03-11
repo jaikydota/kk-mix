@@ -1079,7 +1079,7 @@ class FFmpegVideoEditorApp:
             chinese = next((n for n in names if self._label_has_chinese(n)), None)
             self.title_font.set(msyh or chinese or names[0])
         ttk.Button(parent, text="刷新", command=lambda: self._refresh_title_fonts(font_cb)).grid(row=2, column=2, padx=5)
-        ttk.Label(parent, text="💡 如果标题文字是中文，请尽量选择含中文名称的系统字体，防止显示乱码（您可自己下载安装字体到系统中，安装后点击刷新读取）",
+        ttk.Label(parent, text="💡 如果标题文字是中文，请尽量选择含中文的系统字体，防止显示乱码（您可自己下载安装字体到系统中，安装后重启应用读取）。",
                   foreground='gray').grid(row=3, column=0, columnspan=3, sticky='w', padx=12, pady=(0, 4))
 
         ttk.Label(parent, text="字体大小:").grid(row=4, column=0, sticky='w', padx=10, pady=5)
@@ -1100,13 +1100,51 @@ class FFmpegVideoEditorApp:
         ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=7, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
 
+    # 常见中文字体：注册表英文名 → 中文名（用于下拉框显示）
+    _KNOWN_CHINESE_FONTS = {
+        "Microsoft YaHei":            "微软雅黑",
+        "Microsoft YaHei UI":         "微软雅黑 UI",
+        "Microsoft YaHei Light":      "微软雅黑 细体",
+        "Microsoft YaHei UI Light":   "微软雅黑 UI 细体",
+        "SimSun":                     "宋体",
+        "NSimSun":                    "新宋体",
+        "SimSun-ExtB":                "宋体-ExtB",
+        "SimSun-ExtG":                "宋体-ExtG",
+        "SimHei":                     "黑体",
+        "FangSong":                   "仿宋",
+        "KaiTi":                      "楷体",
+        "FangSong_GB2312":            "仿宋_GB2312",
+        "KaiTi_GB2312":               "楷体_GB2312",
+        "DengXian":                   "等线",
+        "DengXian Light":             "等线 Light",
+        "LiSu":                       "隶书",
+        "YouYuan":                    "幼圆",
+        "STSong":                     "华文宋体",
+        "STZhongsong":                "华文中宋",
+        "STFangsong":                 "华文仿宋",
+        "STKaiti":                    "华文楷体",
+        "STHupo":                     "华文琥珀",
+        "STXihei":                    "华文细黑",
+        "STCaiyun":                   "华文彩云",
+        "STLiti":                     "华文隶书",
+        "STXingkai":                  "华文行楷",
+        "STXinwei":                   "华文新魏",
+        "FZShuTi":                    "方正舒体",
+        "FZYaoTi":                    "方正姚体",
+        "Adobe Heiti Std R":          "Adobe 黑体 Std R",
+        "Adobe Kaiti Std R":          "Adobe 楷体 Std R",
+        "Adobe Song Std L":           "Adobe 宋体 Std L",
+        "Adobe Fangsong Std R":       "Adobe 仿宋 Std R",
+    }
+
     @staticmethod
     def _label_has_chinese(s):
         """判断字符串是否含有中文字符。"""
         return any('\u4e00' <= c <= '\u9fff' or '\u3400' <= c <= '\u4dbf' for c in s)
 
     def _get_system_fonts(self):
-        """从 Windows 注册表读取字体显示名（含中文名称），映射到字体文件路径。
+        """从 Windows 注册表读取字体，映射显示标签→字体文件路径。
+        对已知中文字体生成 "中文名 (English Name)" 格式标签，使其排在前面且易于辨认。
         返回列表顺序：含中文名的字体在前（按名称排序），其余在后（按名称排序）。
         """
         import winreg
@@ -1124,7 +1162,19 @@ class FFmpegVideoEditorApp:
                     i += 1
                     font_path = filename if os.path.isabs(filename) else os.path.join(fonts_dir, filename)
                     if os.path.exists(font_path) and Path(font_path).suffix.lower() in ('.ttf', '.otf', '.ttc'):
-                        label = display_name.replace(" (TrueType)", "").replace(" (OpenType)", "").strip()
+                        eng = display_name.replace(" (TrueType)", "").replace(" (OpenType)", "").strip()
+                        # 包含匹配：按英文名长度从长到短，收集所有命中的中文名（避免短串误匹配长串）
+                        matched_cn = [cn for ek, cn in sorted(
+                            self._KNOWN_CHINESE_FONTS.items(), key=lambda x: -len(x[0])
+                        ) if ek in eng]
+                        # 去重并保持顺序
+                        seen, unique_cn = set(), []
+                        for c in matched_cn:
+                            if c not in seen:
+                                seen.add(c)
+                                unique_cn.append(c)
+                        cn_part = " & ".join(unique_cn)
+                        label = f"{cn_part} ({eng})" if cn_part else eng
                         font_map[label] = font_path
                 except OSError:
                     break
