@@ -1079,7 +1079,7 @@ class FFmpegVideoEditorApp:
             chinese = next((n for n in names if self._label_has_chinese(n)), None)
             self.title_font.set(msyh or chinese or names[0])
         ttk.Button(parent, text="刷新", command=lambda: self._refresh_title_fonts(font_cb)).grid(row=2, column=2, padx=5)
-        ttk.Label(parent, text="💡 如果标题文字是中文，请尽量选择含中文名称的系统字体，防止显示乱码",
+        ttk.Label(parent, text="💡 如果标题文字是中文，请尽量选择含中文名称的系统字体，防止显示乱码（您可自己下载安装字体到系统中，安装后点击刷新读取）",
                   foreground='gray').grid(row=3, column=0, columnspan=3, sticky='w', padx=12, pady=(0, 4))
 
         ttk.Label(parent, text="字体大小:").grid(row=4, column=0, sticky='w', padx=10, pady=5)
