@@ -2034,25 +2034,69 @@ class FFmpegVideoEditorApp:
         finally:
             self.set_controls_state(False)
 
+    def _wrap_title_text(self, text, fontsize, video_width, margin_ratio=0.08):
+        """
+        按视频宽度和字体大小动态换行。
+        中文/全角按 fontsize*1.15 估算宽度（含字间距），ASCII/半角按 fontsize*0.65。
+        两侧各留 margin_ratio (默认8%) 留白。
+        """
+        import unicodedata
+
+        usable_px = video_width * (1.0 - 2 * margin_ratio)
+
+        def char_px(ch):
+            if unicodedata.east_asian_width(ch) in ('W', 'F'):
+                return fontsize * 1.15
+            return fontsize * 0.65
+
+        lines = []
+        current = ""
+        current_w = 0.0
+
+        for ch in text:
+            w = char_px(ch)
+            if current_w + w <= usable_px:
+                current += ch
+                current_w += w
+            else:
+                if current:
+                    lines.append(current)
+                current = ch
+                current_w = w
+
+        if current:
+            lines.append(current)
+
+        return lines if lines else [text]
+
     def _title_ffmpeg(self, input_path, output_path, font_path, title_text, fontsize=30, y_percent=0.08):
-        """使用 FFmpeg drawtext 在视频指定高度居中位置烧录标题文字"""
+        """使用 FFmpeg drawtext 在视频指定高度居中位置烧录标题文字，支持自动换行"""
         try:
-            # 转义 drawtext 中的特殊字符
-            safe_text = title_text.replace("'", "\\'").replace(":", "\\:").replace("\\", "\\\\")
-            # 字体路径在 Windows 下反斜杠需转义
             safe_font = font_path.replace("\\", "/").replace(":", "\\:")
 
-            drawtext = (
-                f"drawtext=fontfile='{safe_font}'"
-                f":text='{safe_text}'"
-                f":x=(w-text_w)/2"
-                f":y=h*{y_percent}"
-                f":fontsize={fontsize}"
-                f":fontcolor=white"
-                f":borderw=3"
-                f":bordercolor=black@0.7"
-                f":shadowx=2:shadowy=2:shadowcolor=black@0.5"
-            )
+            video_width, _ = self.get_video_resolution(input_path)
+            lines = self._wrap_title_text(title_text, fontsize, video_width)
+
+            line_spacing = fontsize * 1.35  # 行间距
+            drawtext_filters = []
+
+            for i, line in enumerate(lines):
+                safe_text = line.replace("\\", "\\\\").replace("'", "\\'").replace(":", "\\:")
+                # 多行时整体垂直居中于 y_percent 位置
+                y_expr = f"h*{y_percent}+{i * line_spacing:.1f}"
+                drawtext_filters.append(
+                    f"drawtext=fontfile='{safe_font}'"
+                    f":text='{safe_text}'"
+                    f":x=(w-text_w)/2"
+                    f":y={y_expr}"
+                    f":fontsize={fontsize}"
+                    f":fontcolor=white"
+                    f":borderw=3"
+                    f":bordercolor=black@0.7"
+                    f":shadowx=2:shadowy=2:shadowcolor=black@0.5"
+                )
+
+            drawtext = ",".join(drawtext_filters)
 
             cmd = [
                 self.ffmpeg_path,
