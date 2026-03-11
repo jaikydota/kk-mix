@@ -358,8 +358,8 @@ class FFmpegVideoEditorApp:
         ROW2 = [
             ("填充音乐",    "music"),
             ("视频添加标题", "title"),
-            ("视频配音",    "speech"),
-            ("视频翻译",    "translate"),
+            ("视频配音(后续开放)",    "speech"),
+            ("视频翻译(后续开放)",    "translate"),
         ]
         CREATE_MAP = {
             "merge":     self.create_merge_tab,
