@@ -1999,7 +1999,34 @@ class FFmpegVideoEditorApp:
             self.log(f"{'='*60}")
 
             if success_count > 0:
-                messagebox.showinfo("完成", f"成功处理 {success_count} 个视频！\n输出目录: {output_folder}")
+                done = threading.Event()
+                def _show_done_dialog():
+                    dlg = tk.Toplevel(self.root)
+                    dlg.withdraw()
+                    dlg.title("完成")
+                    dlg.resizable(False, False)
+                    dlg.transient(self.root)
+                    icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
+                    if os.path.exists(icon_path):
+                        dlg.iconbitmap(icon_path)
+                    tk.Label(dlg, text=f"成功处理 {success_count} 个视频！\n输出目录: {output_folder}",
+                             padx=20, pady=15, justify="left").pack()
+                    btn_frame = tk.Frame(dlg, pady=8)
+                    btn_frame.pack()
+                    tk.Button(btn_frame, text="打开文件夹", width=12,
+                              command=lambda: [os.startfile(output_folder), dlg.destroy(), done.set()]).pack(side="left", padx=6)
+                    tk.Button(btn_frame, text="确定", width=8,
+                              command=lambda: [dlg.destroy(), done.set()]).pack(side="left", padx=6)
+                    dlg.protocol("WM_DELETE_WINDOW", lambda: [dlg.destroy(), done.set()])
+                    dlg.update_idletasks()
+                    w, h = dlg.winfo_reqwidth(), dlg.winfo_reqheight()
+                    rx = self.root.winfo_x() + (self.root.winfo_width() - w) // 2
+                    ry = self.root.winfo_y() + (self.root.winfo_height() - h) // 2
+                    dlg.geometry(f"+{rx}+{ry}")
+                    dlg.deiconify()
+                    dlg.grab_set()
+                self.root.after(0, _show_done_dialog)
+                done.wait()
 
         except Exception as e:
             messagebox.showerror("错误", f"添加标题失败: {str(e)}")
