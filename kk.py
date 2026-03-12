@@ -719,6 +719,35 @@ class FFmpegVideoEditorApp:
         except:
             return 1920, 1080
 
+    def get_video_resolution_fps(self, video_path):
+        """单次 ffprobe 同时获取视频分辨率和帧率，返回 (w, h, fps)"""
+        try:
+            ffprobe_path = self.ffmpeg_path.replace('ffmpeg.exe', 'ffprobe.exe').replace('ffmpeg', 'ffprobe')
+            if os.path.exists(ffprobe_path) or shutil.which(ffprobe_path):
+                cmd = [
+                    ffprobe_path, '-v', 'error', '-select_streams', 'v:0',
+                    '-show_entries', 'stream=width,height,r_frame_rate',
+                    '-of', 'default=noprint_wrappers=1:nokey=1', video_path,
+                ]
+                result = self._run_cmd(cmd, timeout=30)
+                if result.returncode == 0:
+                    lines = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
+                    if len(lines) >= 3:
+                        w, h = int(lines[0]), int(lines[1])
+                        fps_str = lines[2]
+                        if '/' in fps_str:
+                            num, den = fps_str.split('/')
+                            den = int(den)
+                            fps = round(int(num) / den, 6) if den else 30.0
+                        else:
+                            fps = float(fps_str) if fps_str else 30.0
+                        return w, h, fps
+        except Exception:
+            pass
+        # ffprobe 不可用时回退到 get_video_resolution + 默认帧率
+        w, h = self.get_video_resolution(video_path)
+        return w, h, 30.0
+
     def _switch_tab(self, key):
         """切换到指定 Tab，隐藏其余内容区"""
         for k, frame in self._tab_frames.items():
@@ -2870,17 +2899,24 @@ class FFmpegVideoEditorApp:
 
                     self.log(f"\n[{i+1}/{min_count}] 拼接 {len(group_videos)} 个视频")
 
-                    # 分辨率归一化：以第一个视频为基准，居中裁剪其他视频
-                    ref_w, ref_h = self.get_video_resolution(group_videos[0])
-                    self.log(f"    基准分辨率: {ref_w}x{ref_h}（取自第1个视频）")
+                    # 分辨率/帧率归一化：以第一个视频为基准，居中裁剪并统一帧率
+                    ref_w, ref_h, ref_fps = self.get_video_resolution_fps(group_videos[0])
+                    self.log(f"    基准分辨率: {ref_w}x{ref_h}，帧率: {ref_fps}fps（取自第1个视频）")
                     normalized_videos = [group_videos[0]]
                     for k in range(1, len(group_videos)):
                         src = group_videos[k]
-                        w, h = self.get_video_resolution(src)
-                        if w == ref_w and h == ref_h:
+                        w, h, src_fps = self.get_video_resolution_fps(src)
+                        need_resize = (w != ref_w or h != ref_h)
+                        need_fps = (round(src_fps, 3) != round(ref_fps, 3))
+                        if not need_resize and not need_fps:
                             normalized_videos.append(src)
                         else:
-                            self.log(f"    分辨率不符 [{k+1}]: {w}x{h} → 转换为 {ref_w}x{ref_h}")
+                            reasons = []
+                            if need_resize:
+                                reasons.append(f"分辨率 {w}x{h}→{ref_w}x{ref_h}")
+                            if need_fps:
+                                reasons.append(f"帧率 {src_fps}→{ref_fps}fps")
+                            self.log(f"    需要归一化 [{k+1}]: {', '.join(reasons)}")
                             tmp_name = f"tmp_{i:03d}_{k:02d}_{os.path.basename(src)}"
                             tmp_path = os.path.join(temp_dir, tmp_name)
                             resize_cmd = [
@@ -2889,6 +2925,7 @@ class FFmpegVideoEditorApp:
                                     f"scale={ref_w}:{ref_h}:force_original_aspect_ratio=increase,"
                                     f"crop={ref_w}:{ref_h},setsar=1"
                                 ),
+                                '-r', str(ref_fps),
                                 '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
                                 '-c:a', 'aac', '-threads', '0', '-y', tmp_path,
                             ]
@@ -2896,7 +2933,7 @@ class FFmpegVideoEditorApp:
                             if res.returncode == 0 and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
                                 normalized_videos.append(tmp_path)
                             else:
-                                self.log(f"    ✗ 分辨率转换失败，使用原始文件: {os.path.basename(src)}")
+                                self.log(f"    ✗ 归一化转换失败，使用原始文件: {os.path.basename(src)}")
                                 normalized_videos.append(src)
 
                     if self._concat_with_transition(normalized_videos, output_path):
