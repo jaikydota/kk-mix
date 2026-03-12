@@ -276,6 +276,10 @@ class FFmpegVideoEditorApp:
         # 调试
         self.verbose_log = tk.BooleanVar(value=False)
 
+        # 性能与稳定性
+        self.thread_count = tk.StringVar(value="1")
+        self.speed_priority = tk.BooleanVar(value=True)
+
         # 支持的文件类型
         self.video_extensions = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm'}
         self.image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
@@ -406,17 +410,6 @@ class FFmpegVideoEditorApp:
 
         self._switch_tab("merge")
         
-        # 性能设置
-        perf_frame = ttk.LabelFrame(self.root, text="性能与稳定性设置", padding=5)
-        perf_frame.pack(fill='x', padx=10, pady=5)
-        
-        ttk.Label(perf_frame, text="并行线程数:").pack(side='left', padx=5)
-        self.thread_count = tk.StringVar(value="1")
-        ttk.Entry(perf_frame, textvariable=self.thread_count, width=5, state='readonly').pack(side='left', padx=5)
-        
-        self.speed_priority = tk.BooleanVar(value=True)
-        ttk.Checkbutton(perf_frame, text="极速模式（ultrafast）", variable=self.speed_priority).pack(side='left', padx=10)
-        
         # 控制按钮
         control_frame = ttk.Frame(self.root)
         control_frame.pack(fill='x', padx=10, pady=5)
@@ -426,6 +419,8 @@ class FFmpegVideoEditorApp:
         
         self.stop_btn = ttk.Button(control_frame, text="停止", command=self.stop_operation, state='disabled')
         self.stop_btn.pack(side='left', padx=5)
+
+        ttk.Button(control_frame, text="导出日志", command=self.export_log).pack(side='right', padx=5)
         
         # 进度条
         self.progress_var = tk.DoubleVar()
@@ -452,6 +447,24 @@ class FFmpegVideoEditorApp:
             self.log_text.insert('end', f"[{timestamp}] {message}\n")
             self.log_text.see('end')
             self.root.update()
+
+    def export_log(self):
+        """将操作日志导出为 {时间}.log 文件"""
+        content = self.log_text.get("1.0", "end").strip()
+        if not content:
+            messagebox.showinfo("提示", "操作日志为空，无需导出。")
+            return
+        folder = filedialog.askdirectory(title="选择日志导出文件夹")
+        if not folder:
+            return
+        filename = datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
+        filepath = os.path.join(folder, filename)
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(content)
+            self.log(f"[日志] 已导出到：{filepath}")
+        except Exception as e:
+            messagebox.showerror("导出失败", f"写入文件失败：{e}")
 
     def _run_cmd(self, cmd: list, timeout: int = 600):
         """统一执行子进程命令，支持详细日志。返回 CompletedProcess 对象。"""
