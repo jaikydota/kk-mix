@@ -17,7 +17,7 @@ import shutil
 import speech_tab
 import settings_window
 
-VERSION = "v8.3"
+VERSION = "v8.3.1"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -421,6 +421,7 @@ class FFmpegVideoEditorApp:
         self.stop_btn.pack(side='left', padx=5)
 
         ttk.Button(control_frame, text="导出日志", command=self.export_log).pack(side='right', padx=5)
+        ttk.Button(control_frame, text="清空日志", command=self.clear_log).pack(side='right', padx=5)
         
         # 进度条
         self.progress_var = tk.DoubleVar()
@@ -447,6 +448,10 @@ class FFmpegVideoEditorApp:
             self.log_text.insert('end', f"[{timestamp}] {message}\n")
             self.log_text.see('end')
             self.root.update()
+
+    def clear_log(self):
+        """清空操作日志"""
+        self.log_text.delete("1.0", "end")
 
     def export_log(self):
         """将操作日志导出为 {时间}.log 文件"""
