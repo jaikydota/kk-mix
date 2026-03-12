@@ -17,7 +17,7 @@ import shutil
 import speech_tab
 import settings_window
 
-VERSION = "v8.3.1"
+VERSION = "v8.3.2"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -462,7 +462,7 @@ class FFmpegVideoEditorApp:
         folder = filedialog.askdirectory(title="选择日志导出文件夹")
         if not folder:
             return
-        filename = datetime.now().strftime("%Y%m%d_%H%M%S") + ".log"
+        filename = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{VERSION}.log"
         filepath = os.path.join(folder, filename)
         try:
             with open(filepath, "w", encoding="utf-8") as f:
