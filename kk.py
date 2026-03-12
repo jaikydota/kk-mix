@@ -3050,10 +3050,17 @@ class FFmpegVideoEditorApp:
                 self.log(f"    ✓ 拼接成功: {os.path.basename(output_path)} ({file_size_mb:.1f} MB)")
                 return True
             else:
+                if os.path.exists(output_path) and os.path.getsize(output_path) == 0:
+                    os.remove(output_path)
                 self.log(f"    ✗ 拼接失败: {result.stderr[-500:] if result.stderr else '未知错误'}")
                 return False
 
         except Exception as e:
+            if os.path.exists(output_path) and os.path.getsize(output_path) == 0:
+                try:
+                    os.remove(output_path)
+                except Exception:
+                    pass
             self.log(f"    ✗ 拼接异常: {str(e)}")
             return False
     
