@@ -2850,37 +2850,77 @@ class FFmpegVideoEditorApp:
             self.log(f"{'='*60}\n")
             
             success_count = 0
-            
-            for i in range(min_count):
-                if self.check_pause_stop():
-                    break
-                    
-                # 收集当前组的视频
-                group_videos = []
-                for j, videos in enumerate(all_videos):
-                    group_videos.append(os.path.join(folders[j], videos[i]))
-                
-                output_name = f"concat_{i+1:03d}.mp4"
-                output_path = os.path.join(output, output_name)
-                
-                self.log(f"\n[{i+1}/{min_count}] 拼接 {len(group_videos)} 个视频")
-                
-                if self._concat_with_transition(group_videos, output_path):
-                    success_count += 1
-                    self.log(f"✓ 成功: {output_name}")
-                else:
-                    self.log(f"✗ 失败")
-                
-                self.progress_var.set((i + 1) / min_count * 100)
-                self.update_status(f"转场拼接中... {i+1}/{min_count}")
-            
+
+            # 创建临时文件夹，用于存放分辨率归一化后的视频
+            temp_dir = os.path.join(output, "_concat_temp_resize")
+            os.makedirs(temp_dir, exist_ok=True)
+
+            try:
+                for i in range(min_count):
+                    if self.check_pause_stop():
+                        break
+
+                    # 收集当前组的视频
+                    group_videos = []
+                    for j, videos in enumerate(all_videos):
+                        group_videos.append(os.path.join(folders[j], videos[i]))
+
+                    output_name = f"concat_{i+1:03d}.mp4"
+                    output_path = os.path.join(output, output_name)
+
+                    self.log(f"\n[{i+1}/{min_count}] 拼接 {len(group_videos)} 个视频")
+
+                    # 分辨率归一化：以第一个视频为基准，居中裁剪其他视频
+                    ref_w, ref_h = self.get_video_resolution(group_videos[0])
+                    self.log(f"    基准分辨率: {ref_w}x{ref_h}（取自第1个视频）")
+                    normalized_videos = [group_videos[0]]
+                    for k in range(1, len(group_videos)):
+                        src = group_videos[k]
+                        w, h = self.get_video_resolution(src)
+                        if w == ref_w and h == ref_h:
+                            normalized_videos.append(src)
+                        else:
+                            self.log(f"    分辨率不符 [{k+1}]: {w}x{h} → 转换为 {ref_w}x{ref_h}")
+                            tmp_name = f"tmp_{i:03d}_{k:02d}_{os.path.basename(src)}"
+                            tmp_path = os.path.join(temp_dir, tmp_name)
+                            resize_cmd = [
+                                self.ffmpeg_path, '-i', src,
+                                '-vf', (
+                                    f"scale={ref_w}:{ref_h}:force_original_aspect_ratio=increase,"
+                                    f"crop={ref_w}:{ref_h},setsar=1"
+                                ),
+                                '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+                                '-c:a', 'aac', '-threads', '0', '-y', tmp_path,
+                            ]
+                            res = self._run_cmd(resize_cmd, timeout=600)
+                            if res.returncode == 0 and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+                                normalized_videos.append(tmp_path)
+                            else:
+                                self.log(f"    ✗ 分辨率转换失败，使用原始文件: {os.path.basename(src)}")
+                                normalized_videos.append(src)
+
+                    if self._concat_with_transition(normalized_videos, output_path):
+                        success_count += 1
+                        self.log(f"✓ 成功: {output_name}")
+                    else:
+                        self.log(f"✗ 失败")
+
+                    self.progress_var.set((i + 1) / min_count * 100)
+                    self.update_status(f"转场拼接中... {i+1}/{min_count}")
+
+            finally:
+                # 清理临时文件夹
+                if os.path.exists(temp_dir):
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    self.log(f"    临时文件夹已清理")
+
             self.log(f"\n{'='*60}")
             self.log(f"完成！成功生成 {success_count}/{min_count} 个视频")
             self.log(f"{'='*60}")
-            
+
             if success_count > 0:
                 messagebox.showinfo("完成", f"成功生成 {success_count} 个拼接视频！")
-            
+
         except Exception as e:
             messagebox.showerror("错误", f"转场拼接失败: {str(e)}")
             self.log(f"✗ 错误: {str(e)}")
