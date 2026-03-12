@@ -731,7 +731,7 @@ class FFmpegVideoEditorApp:
             if os.path.exists(ffprobe_path) or shutil.which(ffprobe_path):
                 cmd = [
                     ffprobe_path, '-v', 'error', '-select_streams', 'v:0',
-                    '-show_entries', 'stream=width,height,r_frame_rate',
+                    '-show_entries', 'stream=width,height,avg_frame_rate',
                     '-of', 'default=noprint_wrappers=1:nokey=1', video_path,
                 ]
                 result = self._run_cmd(cmd, timeout=30)
@@ -2905,15 +2905,30 @@ class FFmpegVideoEditorApp:
                     self.log(f"\n[{i+1}/{min_count}] 拼接 {len(group_videos)} 个视频")
 
                     # 分辨率/帧率归一化：以第一个视频为基准，居中裁剪并统一帧率
+                    td = self.concat_transition.get()
                     ref_w, ref_h, ref_fps = self.get_video_resolution_fps(group_videos[0])
                     self.log(f"    基准分辨率: {ref_w}x{ref_h}，帧率: {ref_fps}fps（取自第1个视频）")
-                    normalized_videos = [group_videos[0]]
+                    # 预扫描：判断是否有任何视频需要归一化
+                    any_needs_norm = False
                     for k in range(1, len(group_videos)):
+                        _w, _h, _fps = self.get_video_resolution_fps(group_videos[k])
+                        if (_w != ref_w or _h != ref_h) or (round(_fps, 3) != round(ref_fps, 3)):
+                            any_needs_norm = True
+                            break
+                    # xfade 要求所有输入 timebase 一致；只要有视频被重编码，
+                    # 第一个视频也必须同样重编码，否则原始 tbn 与重编码后 tbn 不同
+                    normalized_videos = []
+                    for k in range(len(group_videos)):
                         src = group_videos[k]
-                        w, h, src_fps = self.get_video_resolution_fps(src)
+                        if k == 0:
+                            w, h, src_fps = ref_w, ref_h, ref_fps
+                        else:
+                            w, h, src_fps = self.get_video_resolution_fps(src)
                         need_resize = (w != ref_w or h != ref_h)
                         need_fps = (round(src_fps, 3) != round(ref_fps, 3))
-                        if not need_resize and not need_fps:
+                        # 有转场时：只要有其他视频被重编码，第一个也必须重编码保证 timebase 一致
+                        force_reencode = (k == 0 and td > 0 and any_needs_norm)
+                        if not need_resize and not need_fps and not force_reencode:
                             normalized_videos.append(src)
                         else:
                             reasons = []
@@ -2921,15 +2936,17 @@ class FFmpegVideoEditorApp:
                                 reasons.append(f"分辨率 {w}x{h}→{ref_w}x{ref_h}")
                             if need_fps:
                                 reasons.append(f"帧率 {src_fps}→{ref_fps}fps")
+                            if force_reencode and not need_resize and not need_fps:
+                                reasons.append("timebase 对齐（xfade）")
                             self.log(f"    需要归一化 [{k+1}]: {', '.join(reasons)}")
                             tmp_name = f"tmp_{i:03d}_{k:02d}_{os.path.basename(src)}"
                             tmp_path = os.path.join(temp_dir, tmp_name)
                             resize_cmd = [
                                 self.ffmpeg_path, '-i', src,
-                                '-vf', (
-                                    f"scale={ref_w}:{ref_h}:force_original_aspect_ratio=increase,"
-                                    f"crop={ref_w}:{ref_h},setsar=1"
-                                ),
+                            ]
+                            if need_resize:
+                                resize_cmd += ['-vf', f"scale={ref_w}:{ref_h}:force_original_aspect_ratio=increase,crop={ref_w}:{ref_h},setsar=1"]
+                            resize_cmd += [
                                 '-r', str(ref_fps),
                                 '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
                                 '-c:a', 'aac', '-threads', '0', '-y', tmp_path,

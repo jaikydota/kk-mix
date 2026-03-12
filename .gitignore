@@ -68,3 +68,6 @@ logs/
 # 项目特定
 examples/
 temp/*
+
+ffmpeg.exe
+ffprobe.exe
