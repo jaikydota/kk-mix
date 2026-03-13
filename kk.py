@@ -249,6 +249,8 @@ class FFmpegVideoEditorApp:
         self.title_fontsize = tk.StringVar(value="30")
         self.title_y_percent = tk.StringVar(value="8")
         self.title_text = tk.StringVar()
+        self.title_text_mode = tk.StringVar(value="fixed")  # "fixed" 或 "txt"
+        self.title_txt_file = tk.StringVar()
 
         # 批量裁剪比例
         self.crop_video_folder = tk.StringVar()
@@ -1189,10 +1191,39 @@ class FFmpegVideoEditorApp:
         ttk.Entry(ypos_frame, textvariable=self.title_y_percent, width=8).pack(side='left')
         ttk.Label(ypos_frame, text="% 距顶部（默认 8%）", foreground='gray').pack(side='left', padx=5)
 
-        ttk.Label(parent, text="标题文字:").grid(row=6, column=0, sticky='w', padx=10, pady=5)
-        ttk.Entry(parent, textvariable=self.title_text).grid(row=6, column=1, padx=5, sticky='ew')
+        ttk.Label(parent, text="标题来源:").grid(row=6, column=0, sticky='w', padx=10, pady=5)
+        mode_frame = ttk.Frame(parent)
+        mode_frame.grid(row=6, column=1, padx=5, sticky='w')
 
-        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=7, column=0, columnspan=3, pady=15)
+        # 固定文字行
+        fixed_frame = ttk.Frame(parent)
+        fixed_frame.grid(row=7, column=0, columnspan=3, sticky='ew', padx=5, pady=2)
+        ttk.Label(fixed_frame, text="标题文字:").pack(side='left', padx=(5, 5))
+        ttk.Entry(fixed_frame, textvariable=self.title_text).pack(side='left', fill='x', expand=True, padx=(0, 5))
+
+        # TXT文件行
+        txt_frame = ttk.Frame(parent)
+        txt_frame.grid(row=7, column=0, columnspan=3, sticky='ew', padx=5, pady=2)
+        ttk.Label(txt_frame, text="TXT文件:").pack(side='left', padx=(5, 5))
+        ttk.Entry(txt_frame, textvariable=self.title_txt_file).pack(side='left', fill='x', expand=True, padx=(0, 5))
+        ttk.Button(txt_frame, text="浏览", command=self._browse_title_txt).pack(side='left')
+        ttk.Label(txt_frame, text="（每行一条标题，不够则循环）", foreground='gray').pack(side='left', padx=(6, 0))
+
+        def _toggle_title_mode():
+            if self.title_text_mode.get() == "fixed":
+                txt_frame.grid_remove()
+                fixed_frame.grid()
+            else:
+                fixed_frame.grid_remove()
+                txt_frame.grid()
+
+        ttk.Radiobutton(mode_frame, text="固定文字", variable=self.title_text_mode,
+                        value="fixed", command=_toggle_title_mode).pack(side='left', padx=(0, 15))
+        ttk.Radiobutton(mode_frame, text="从TXT读取", variable=self.title_text_mode,
+                        value="txt", command=_toggle_title_mode).pack(side='left')
+        _toggle_title_mode()
+
+        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=8, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
 
     def create_crop_tab(self, parent):
@@ -1311,6 +1342,15 @@ class FFmpegVideoEditorApp:
         combobox['values'] = values
         if values and not self.title_font.get():
             self.title_font.set(values[0])
+
+    def _browse_title_txt(self):
+        """浏览并选择标题TXT文件"""
+        path = filedialog.askopenfilename(
+            title="选择标题TXT文件",
+            filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")]
+        )
+        if path:
+            self.title_txt_file.set(path)
 
     # ===== 启动方法（新增）=====
     
@@ -2091,7 +2131,7 @@ class FFmpegVideoEditorApp:
             video_folder = self.title_video_folder.get()
             output_folder = self.title_output_folder.get().strip()
             font_name = self.title_font.get()
-            title_text = ''.join(ch for ch in self.title_text.get() if ch.isprintable()).strip()
+            text_mode = self.title_text_mode.get()
             try:
                 fontsize = max(10, int(self.title_fontsize.get()))
             except ValueError:
@@ -2107,9 +2147,27 @@ class FFmpegVideoEditorApp:
             if not font_name:
                 messagebox.showerror("错误", "请选择字体！")
                 return
-            if not title_text:
-                messagebox.showerror("错误", "请输入标题文字！")
-                return
+
+            if text_mode == "fixed":
+                fixed_title = ''.join(ch for ch in self.title_text.get() if ch.isprintable()).strip()
+                if not fixed_title:
+                    messagebox.showerror("错误", "请输入标题文字！")
+                    return
+                title_lines = None
+            else:
+                txt_file = self.title_txt_file.get().strip()
+                if not txt_file:
+                    messagebox.showerror("错误", "请选择TXT文件！")
+                    return
+                if not os.path.exists(txt_file):
+                    messagebox.showerror("错误", f"TXT文件不存在：{txt_file}")
+                    return
+                with open(txt_file, 'r', encoding='utf-8') as f:
+                    title_lines = [line.strip() for line in f if line.strip()]
+                if not title_lines:
+                    messagebox.showerror("错误", "TXT文件中没有有效内容！")
+                    return
+                fixed_title = None
 
             font_path = getattr(self, '_title_font_map', {}).get(font_name)
             if not font_path or not os.path.exists(font_path):
@@ -2128,7 +2186,10 @@ class FFmpegVideoEditorApp:
             self.log(f"\n{'='*60}")
             self.log(f"开始批量添加标题")
             self.log(f"视频数: {len(video_files)} 个")
-            self.log(f"标题: {title_text}")
+            if title_lines:
+                self.log(f"标题来源: TXT文件，共 {len(title_lines)} 行（不够则循环）")
+            else:
+                self.log(f"标题: {fixed_title}")
             self.log(f"字体: {font_name}")
             self.log(f"{'='*60}\n")
 
@@ -2142,10 +2203,13 @@ class FFmpegVideoEditorApp:
                 output_name = f"title_{idx:03d}_{Path(video_file).stem}.mp4"
                 output_path = os.path.join(output_folder, output_name)
 
+                current_title = title_lines[(idx - 1) % len(title_lines)] if title_lines else fixed_title
+
                 self.log(f"\n[{idx}/{len(video_files)}] 处理: {video_file}")
+                self.log(f"  标题: {current_title}")
 
                 try:
-                    ok = self._title_ffmpeg(video_path, output_path, font_path, title_text, fontsize, y_percent)
+                    ok = self._title_ffmpeg(video_path, output_path, font_path, current_title, fontsize, y_percent)
                 except RuntimeError as e:
                     if "__font_error__" in str(e):
                         self.log(f"✗ 字体加载失败，终止批处理")
