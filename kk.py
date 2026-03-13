@@ -17,7 +17,7 @@ import shutil
 import speech_tab
 import settings_window
 
-VERSION = "v8.3.2"
+VERSION = "v8.3.3"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -752,6 +752,46 @@ class FFmpegVideoEditorApp:
         # ffprobe 不可用时回退到 get_video_resolution + 默认帧率
         w, h = self.get_video_resolution(video_path)
         return w, h, 30.0
+
+    def _has_audio_stream(self, video_path):
+        """用 ffprobe 检测视频文件是否包含音频流，返回 True/False"""
+        _, _, _, has_audio = self._get_video_info(video_path)
+        return has_audio
+
+    def _get_video_info(self, video_path):
+        """单次 ffprobe 获取分辨率、帧率及是否有音频流，返回 (w, h, fps, has_audio)"""
+        try:
+            ffprobe_path = self.ffmpeg_path.replace('ffmpeg.exe', 'ffprobe.exe').replace('ffmpeg', 'ffprobe')
+            cmd = [
+                ffprobe_path, '-v', 'error', '-show_streams',
+                '-show_entries', 'stream=codec_type,width,height,avg_frame_rate',
+                '-of', 'json', video_path,
+            ]
+            r = self._run_cmd(cmd, timeout=30)
+            if r.returncode == 0 and r.stdout.strip():
+                streams = json.loads(r.stdout).get('streams', [])
+                w, h, fps, has_audio = 1920, 1080, 30.0, False
+                got_video = False
+                for s in streams:
+                    ctype = s.get('codec_type', '')
+                    if ctype == 'video' and not got_video:
+                        w = s.get('width', 1920)
+                        h = s.get('height', 1080)
+                        fps_str = s.get('avg_frame_rate', '30/1')
+                        if '/' in fps_str:
+                            num, den = fps_str.split('/')
+                            den = int(den)
+                            fps = round(int(num) / den, 6) if den else 30.0
+                        else:
+                            fps = float(fps_str) if fps_str else 30.0
+                        got_video = True
+                    elif ctype == 'audio':
+                        has_audio = True
+                return w, h, fps, has_audio
+        except Exception:
+            pass
+        w, h = self.get_video_resolution(video_path)
+        return w, h, 30.0, True  # 解析失败时保守假设有音频
 
     def _switch_tab(self, key):
         """切换到指定 Tab，隐藏其余内容区"""
@@ -2051,7 +2091,7 @@ class FFmpegVideoEditorApp:
             video_folder = self.title_video_folder.get()
             output_folder = self.title_output_folder.get().strip()
             font_name = self.title_font.get()
-            title_text = self.title_text.get().strip()
+            title_text = ''.join(ch for ch in self.title_text.get() if ch.isprintable()).strip()
             try:
                 fontsize = max(10, int(self.title_fontsize.get()))
             except ValueError:
@@ -2921,14 +2961,18 @@ class FFmpegVideoEditorApp:
                     for k in range(len(group_videos)):
                         src = group_videos[k]
                         if k == 0:
+                            # 分辨率/帧率已知，仅需一次 ffprobe 查音频
+                            _, _, _, src_has_audio = self._get_video_info(src)
                             w, h, src_fps = ref_w, ref_h, ref_fps
                         else:
-                            w, h, src_fps = self.get_video_resolution_fps(src)
+                            # 一次 ffprobe 同时获取分辨率、帧率、音频
+                            w, h, src_fps, src_has_audio = self._get_video_info(src)
                         need_resize = (w != ref_w or h != ref_h)
                         need_fps = (round(src_fps, 3) != round(ref_fps, 3))
                         # 有转场时：只要有其他视频被重编码，第一个也必须重编码保证 timebase 一致
                         force_reencode = (k == 0 and td > 0 and any_needs_norm)
-                        if not need_resize and not need_fps and not force_reencode:
+                        need_audio_fix = not src_has_audio
+                        if not need_resize and not need_fps and not force_reencode and not need_audio_fix:
                             normalized_videos.append(src)
                         else:
                             reasons = []
@@ -2938,19 +2982,36 @@ class FFmpegVideoEditorApp:
                                 reasons.append(f"帧率 {src_fps}→{ref_fps}fps")
                             if force_reencode and not need_resize and not need_fps:
                                 reasons.append("timebase 对齐（xfade）")
+                            if need_audio_fix:
+                                reasons.append("补充静音音频轨")
                             self.log(f"    需要归一化 [{k+1}]: {', '.join(reasons)}")
                             tmp_name = f"tmp_{i:03d}_{k:02d}_{os.path.basename(src)}"
                             tmp_path = os.path.join(temp_dir, tmp_name)
-                            resize_cmd = [
-                                self.ffmpeg_path, '-i', src,
-                            ]
-                            if need_resize:
-                                resize_cmd += ['-vf', f"scale={ref_w}:{ref_h}:force_original_aspect_ratio=increase,crop={ref_w}:{ref_h},setsar=1"]
-                            resize_cmd += [
-                                '-r', str(ref_fps),
-                                '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-                                '-c:a', 'aac', '-threads', '0', '-y', tmp_path,
-                            ]
+                            if need_audio_fix:
+                                # 源文件无音频流：注入 lavfi 静音轨合并进来
+                                resize_cmd = [
+                                    self.ffmpeg_path, '-i', src,
+                                    '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+                                ]
+                                if need_resize:
+                                    resize_cmd += ['-vf', f"scale={ref_w}:{ref_h}:force_original_aspect_ratio=increase,crop={ref_w}:{ref_h},setsar=1"]
+                                resize_cmd += [
+                                    '-r', str(ref_fps),
+                                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+                                    '-c:a', 'aac', '-shortest',
+                                    '-threads', '0', '-y', tmp_path,
+                                ]
+                            else:
+                                resize_cmd = [
+                                    self.ffmpeg_path, '-i', src,
+                                ]
+                                if need_resize:
+                                    resize_cmd += ['-vf', f"scale={ref_w}:{ref_h}:force_original_aspect_ratio=increase,crop={ref_w}:{ref_h},setsar=1"]
+                                resize_cmd += [
+                                    '-r', str(ref_fps),
+                                    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+                                    '-c:a', 'aac', '-threads', '0', '-y', tmp_path,
+                                ]
                             res = self._run_cmd(resize_cmd, timeout=600)
                             if res.returncode == 0 and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
                                 normalized_videos.append(tmp_path)
