@@ -1195,27 +1195,37 @@ class FFmpegVideoEditorApp:
         mode_frame = ttk.Frame(parent)
         mode_frame.grid(row=6, column=1, padx=5, sticky='w')
 
-        # 固定文字行
-        fixed_frame = ttk.Frame(parent)
-        fixed_frame.grid(row=7, column=0, columnspan=3, sticky='ew', padx=5, pady=2)
-        ttk.Label(fixed_frame, text="标题文字:").pack(side='left', padx=(5, 5))
-        ttk.Entry(fixed_frame, textvariable=self.title_text).pack(side='left', fill='x', expand=True, padx=(0, 5))
+        # 固定文字行（与视频文件夹行对齐：col0=标签, col1=输入框, col2=空）
+        fixed_label = ttk.Label(parent, text="标题文字:")
+        fixed_label.grid(row=7, column=0, sticky='w', padx=10, pady=5)
+        fixed_entry = ttk.Entry(parent, textvariable=self.title_text)
+        fixed_entry.grid(row=7, column=1, columnspan=2, padx=5, sticky='ew')
 
-        # TXT文件行
-        txt_frame = ttk.Frame(parent)
-        txt_frame.grid(row=7, column=0, columnspan=3, sticky='ew', padx=5, pady=2)
-        ttk.Label(txt_frame, text="TXT文件:").pack(side='left', padx=(5, 5))
-        ttk.Entry(txt_frame, textvariable=self.title_txt_file).pack(side='left', fill='x', expand=True, padx=(0, 5))
-        ttk.Button(txt_frame, text="浏览", command=self._browse_title_txt).pack(side='left')
-        ttk.Label(txt_frame, text="（每行一条标题，不够则循环）", foreground='gray').pack(side='left', padx=(6, 0))
+        # TXT文件行（与视频文件夹行对齐：col0=标签, col1=输入框, col2=浏览按钮）
+        txt_label = ttk.Label(parent, text="TXT文件:")
+        txt_label.grid(row=7, column=0, sticky='w', padx=10, pady=5)
+        txt_entry = ttk.Entry(parent, textvariable=self.title_txt_file)
+        txt_entry.grid(row=7, column=1, padx=5, sticky='ew')
+        txt_btn = ttk.Button(parent, text="浏览", command=self._browse_title_txt)
+        txt_btn.grid(row=7, column=2, padx=5)
+        txt_hint = ttk.Label(parent, text="💡 每行一条标题，视频数量超出时从第一行循环读取。", foreground='gray')
+        txt_hint.grid(row=8, column=0, columnspan=3, sticky='w', padx=12, pady=(0, 4))
 
         def _toggle_title_mode():
             if self.title_text_mode.get() == "fixed":
-                txt_frame.grid_remove()
-                fixed_frame.grid()
+                txt_label.grid_remove()
+                txt_entry.grid_remove()
+                txt_btn.grid_remove()
+                txt_hint.grid_remove()
+                fixed_label.grid()
+                fixed_entry.grid()
             else:
-                fixed_frame.grid_remove()
-                txt_frame.grid()
+                fixed_label.grid_remove()
+                fixed_entry.grid_remove()
+                txt_label.grid()
+                txt_entry.grid()
+                txt_btn.grid()
+                txt_hint.grid()
 
         ttk.Radiobutton(mode_frame, text="固定文字", variable=self.title_text_mode,
                         value="fixed", command=_toggle_title_mode).pack(side='left', padx=(0, 15))
@@ -1223,7 +1233,7 @@ class FFmpegVideoEditorApp:
                         value="txt", command=_toggle_title_mode).pack(side='left')
         _toggle_title_mode()
 
-        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=8, column=0, columnspan=3, pady=15)
+        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=9, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
 
     def create_crop_tab(self, parent):
