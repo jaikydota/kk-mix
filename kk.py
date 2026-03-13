@@ -17,7 +17,7 @@ import shutil
 import speech_tab
 import settings_window
 
-VERSION = "v8.3.3"
+VERSION = "v8.3.5"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
