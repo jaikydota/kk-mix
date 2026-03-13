@@ -2213,7 +2213,7 @@ class FFmpegVideoEditorApp:
                 output_name = f"title_{idx:03d}_{Path(video_file).stem}.mp4"
                 output_path = os.path.join(output_folder, output_name)
 
-                current_title = title_lines[(idx - 1) % len(title_lines)] if title_lines else fixed_title
+                current_title = (title_lines[(idx - 1) % len(title_lines)] if title_lines else fixed_title).replace('%', '')
 
                 self.log(f"\n[{idx}/{len(video_files)}] 处理: {video_file}")
                 self.log(f"  标题: {current_title}")
