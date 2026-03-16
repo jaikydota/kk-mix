@@ -706,25 +706,28 @@ class FFmpegVideoEditorApp:
             pass
         return 0.0
 
-    def get_video_resolution(self, video_path):
-        """获取视频分辨率"""
+    def get_video_resolution_fps_bak(self, video_path):
+        """通过 ffmpeg stderr 解析视频分辨率和帧率（备用方案，会解码整个视频，优先使用 get_video_resolution_fps）"""
+        import re
         try:
             cmd = [self.ffmpeg_path, '-i', video_path, '-f', 'null', '-']
             result = self._run_cmd(cmd, timeout=30)
-            
+
+            w, h, fps = 1920, 1080, 25.0
             for line in result.stderr.split('\n'):
                 if 'Stream #0:0' in line and 'Video:' in line:
-                    parts = line.split(', ')
-                    for part in parts:
-                        if 'x' in part and not part.startswith('Duration'):
-                            try:
-                                w, h = part.strip().split(' ')[0].split('x')
-                                return int(w), int(h)
-                            except:
-                                pass
-            return 1920, 1080
+                    # 解析分辨率
+                    res_match = re.search(r'(\d{2,5})x(\d{2,5})', line)
+                    if res_match:
+                        w, h = int(res_match.group(1)), int(res_match.group(2))
+                    # 解析帧率（取 tbr/fps 数值）
+                    fps_match = re.search(r'([\d.]+)\s*(?:fps|tbr)', line)
+                    if fps_match:
+                        fps = float(fps_match.group(1))
+                    break
+            return w, h, fps
         except:
-            return 1920, 1080
+            return 1920, 1080, 25.0
 
     def get_video_resolution_fps(self, video_path):
         """单次 ffprobe 同时获取视频分辨率和帧率，返回 (w, h, fps)"""
@@ -745,20 +748,14 @@ class FFmpegVideoEditorApp:
                         if '/' in fps_str:
                             num, den = fps_str.split('/')
                             den = int(den)
-                            fps = round(int(num) / den, 6) if den else 30.0
+                            fps = round(int(num) / den, 6) if den else 25.0
                         else:
-                            fps = float(fps_str) if fps_str else 30.0
+                            fps = float(fps_str) if fps_str else 25.0
                         return w, h, fps
         except Exception:
             pass
-        # ffprobe 不可用时回退到 get_video_resolution + 默认帧率
-        w, h = self.get_video_resolution(video_path)
-        return w, h, 30.0
-
-    def _has_audio_stream(self, video_path):
-        """用 ffprobe 检测视频文件是否包含音频流，返回 True/False"""
-        _, _, _, has_audio = self._get_video_info(video_path)
-        return has_audio
+        # ffprobe 不可用时回退到 get_video_resolution_fps_bak
+        return self.get_video_resolution_fps_bak(video_path)
 
     def _get_video_info(self, video_path):
         """单次 ffprobe 获取分辨率、帧率及是否有音频流，返回 (w, h, fps, has_audio)"""
@@ -772,28 +769,28 @@ class FFmpegVideoEditorApp:
             r = self._run_cmd(cmd, timeout=30)
             if r.returncode == 0 and r.stdout.strip():
                 streams = json.loads(r.stdout).get('streams', [])
-                w, h, fps, has_audio = 1920, 1080, 30.0, False
+                w, h, fps, has_audio = 1920, 1080, 25.0, False
                 got_video = False
                 for s in streams:
                     ctype = s.get('codec_type', '')
                     if ctype == 'video' and not got_video:
                         w = s.get('width', 1920)
                         h = s.get('height', 1080)
-                        fps_str = s.get('avg_frame_rate', '30/1')
+                        fps_str = s.get('avg_frame_rate', '25/1')
                         if '/' in fps_str:
                             num, den = fps_str.split('/')
                             den = int(den)
-                            fps = round(int(num) / den, 6) if den else 30.0
+                            fps = round(int(num) / den, 6) if den else 25.0
                         else:
-                            fps = float(fps_str) if fps_str else 30.0
+                            fps = float(fps_str) if fps_str else 25.0
                         got_video = True
                     elif ctype == 'audio':
                         has_audio = True
                 return w, h, fps, has_audio
         except Exception:
             pass
-        w, h = self.get_video_resolution(video_path)
-        return w, h, 30.0, True  # 解析失败时保守假设有音频
+        w, h, fps = self.get_video_resolution_fps_bak(video_path)
+        return w, h, fps, True  # 解析失败时保守假设有音频
 
     def _switch_tab(self, key):
         """切换到指定 Tab，隐藏其余内容区"""
@@ -1587,7 +1584,7 @@ class FFmpegVideoEditorApp:
         """FFmpeg添加水印"""
         try:
             # 获取视频分辨率
-            video_w, video_h = self.get_video_resolution(input_path)
+            video_w, video_h, _ = self.get_video_resolution_fps(input_path)
             
             # 获取水印图片分辨率
             with Image.open(watermark_path) as img:
@@ -2386,7 +2383,7 @@ class FFmpegVideoEditorApp:
     def _crop_ffmpeg(self, input_path, output_path, ratio_w, ratio_h):
         """居中裁剪视频到指定宽高比，不拉伸画面"""
         try:
-            src_w, src_h = self.get_video_resolution(input_path)
+            src_w, src_h, _ = self.get_video_resolution_fps(input_path)
             src_ratio = src_w / src_h
             target_ratio = ratio_w / ratio_h
 
@@ -2462,7 +2459,7 @@ class FFmpegVideoEditorApp:
         try:
             safe_font = font_path.replace("\\", "/").replace(":", "\\:")
 
-            video_width, _ = self.get_video_resolution(input_path)
+            video_width, _, _ = self.get_video_resolution_fps(input_path)
             lines = self._wrap_title_text(title_text, fontsize, video_width)
 
             line_spacing = fontsize * 1.35  # 行间距
@@ -3294,7 +3291,7 @@ class FFmpegVideoEditorApp:
         """画中画实现"""
         try:
             # 获取背景视频分辨率
-            bg_w, bg_h = self.get_video_resolution(bg_path)
+            bg_w, bg_h, _ = self.get_video_resolution_fps(bg_path)
             
             # 计算前景尺寸
             fg_w = int(bg_w * scale)
