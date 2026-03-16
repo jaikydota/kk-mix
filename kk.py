@@ -17,7 +17,7 @@ import shutil
 import speech_tab
 import settings_window
 
-VERSION = "v8.3.5"
+VERSION = "v8.3.6"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -33,6 +33,7 @@ VERSION_INFO = f"""\
 平台：Windows
 
 更新日志：
+• v8.3.6  视频添加标题支持自定义字体颜色
 • v8.3  增加批量视频裁剪尺寸功能
 • v8.2  增加视频添加标题功能，部分BUG修复
 • v8.1  填充音乐功能优化，支持智能循环/裁剪精确匹配视频时长
@@ -249,6 +250,7 @@ class FFmpegVideoEditorApp:
         self.title_fontsize = tk.StringVar(value="5")
         self.title_fontsize_unit = tk.StringVar(value="percent")  # "percent" 或 "px"
         self.title_y_percent = tk.StringVar(value="8")
+        self.title_fontcolor = tk.StringVar(value="#ffffff")
         self.title_text = tk.StringVar()
         self.title_text_mode = tk.StringVar(value="fixed")  # "fixed" 或 "txt"
         self.title_txt_file = tk.StringVar()
@@ -1202,25 +1204,50 @@ class FFmpegVideoEditorApp:
         ttk.Entry(ypos_frame, textvariable=self.title_y_percent, width=8).pack(side='left')
         ttk.Label(ypos_frame, text="% 距顶部（默认 8%）", foreground='gray').pack(side='left', padx=5)
 
-        ttk.Label(parent, text="标题来源:").grid(row=6, column=0, sticky='w', padx=10, pady=5)
+        ttk.Label(parent, text="字体颜色:").grid(row=6, column=0, sticky='w', padx=10, pady=5)
+        color_frame = ttk.Frame(parent)
+        color_frame.grid(row=6, column=1, padx=5, sticky='w')
+        color_preview_btn = tk.Button(color_frame, width=3, bg=self.title_fontcolor.get(),
+                                      relief='solid', bd=1, cursor='hand2')
+        color_preview_btn.pack(side='left', padx=(0, 8))
+
+        def _pick_color():
+            from tkinter import colorchooser
+            result = colorchooser.askcolor(color=self.title_fontcolor.get(), title="选择字体颜色")
+            if result[1]:
+                self.title_fontcolor.set(result[1])
+                color_preview_btn.config(bg=result[1])
+
+        color_preview_btn.config(command=_pick_color)
+
+        def _set_preset_color(hex_color):
+            self.title_fontcolor.set(hex_color)
+            color_preview_btn.config(bg=hex_color)
+
+        for _name, _hex in [("白色", "#ffffff"), ("黄色", "#ffff00"), ("红色", "#ff3333"), ("黑色", "#000000")]:
+            _hex_captured = _hex
+            ttk.Button(color_frame, text=_name,
+                       command=lambda h=_hex_captured: _set_preset_color(h)).pack(side='left', padx=2)
+
+        ttk.Label(parent, text="标题来源:").grid(row=7, column=0, sticky='w', padx=10, pady=5)
         mode_frame = ttk.Frame(parent)
-        mode_frame.grid(row=6, column=1, padx=5, sticky='w')
+        mode_frame.grid(row=7, column=1, padx=5, sticky='w')
 
         # 固定文字行（与视频文件夹行对齐：col0=标签, col1=输入框, col2=空）
         fixed_label = ttk.Label(parent, text="标题文字:")
-        fixed_label.grid(row=7, column=0, sticky='w', padx=10, pady=5)
+        fixed_label.grid(row=8, column=0, sticky='w', padx=10, pady=5)
         fixed_entry = ttk.Entry(parent, textvariable=self.title_text)
-        fixed_entry.grid(row=7, column=1, columnspan=2, padx=5, sticky='ew')
+        fixed_entry.grid(row=8, column=1, columnspan=2, padx=5, sticky='ew')
 
         # TXT文件行（与视频文件夹行对齐：col0=标签, col1=输入框, col2=浏览按钮）
         txt_label = ttk.Label(parent, text="TXT文件:")
-        txt_label.grid(row=7, column=0, sticky='w', padx=10, pady=5)
+        txt_label.grid(row=8, column=0, sticky='w', padx=10, pady=5)
         txt_entry = ttk.Entry(parent, textvariable=self.title_txt_file)
-        txt_entry.grid(row=7, column=1, padx=5, sticky='ew')
+        txt_entry.grid(row=8, column=1, padx=5, sticky='ew')
         txt_btn = ttk.Button(parent, text="浏览", command=self._browse_title_txt)
-        txt_btn.grid(row=7, column=2, padx=5)
+        txt_btn.grid(row=8, column=2, padx=5)
         txt_hint = ttk.Label(parent, text="💡 每行一条标题，视频数量超出时从第一行循环读取。", foreground='gray')
-        txt_hint.grid(row=8, column=0, columnspan=3, sticky='w', padx=12, pady=(0, 4))
+        txt_hint.grid(row=9, column=0, columnspan=3, sticky='w', padx=12, pady=(0, 4))
 
         def _toggle_title_mode():
             if self.title_text_mode.get() == "fixed":
@@ -1244,7 +1271,7 @@ class FFmpegVideoEditorApp:
                         value="txt", command=_toggle_title_mode).pack(side='left')
         _toggle_title_mode()
 
-        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=9, column=0, columnspan=3, pady=15)
+        ttk.Button(parent, text="批量添加标题", command=self.start_title, style='Accent.TButton').grid(row=10, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
 
     def create_crop_tab(self, parent):
@@ -2195,6 +2222,8 @@ class FFmpegVideoEditorApp:
                     return
                 fixed_title = None
 
+            font_color = self.title_fontcolor.get() or "#ffffff"
+
             font_path = getattr(self, '_title_font_map', {}).get(font_name)
             if not font_path or not os.path.exists(font_path):
                 messagebox.showerror("错误", f"找不到字体文件：{font_name}")
@@ -2235,7 +2264,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"  标题: {current_title}")
 
                 try:
-                    ok = self._title_ffmpeg(video_path, output_path, font_path, current_title, fontsize_val, y_percent, fontsize_unit)
+                    ok = self._title_ffmpeg(video_path, output_path, font_path, current_title, fontsize_val, y_percent, fontsize_unit, font_color)
                 except RuntimeError as e:
                     if "__font_error__" in str(e):
                         self.log(f"✗ 字体加载失败，终止批处理")
@@ -2473,10 +2502,16 @@ class FFmpegVideoEditorApp:
 
         return lines if lines else [text]
 
-    def _title_ffmpeg(self, input_path, output_path, font_path, title_text, fontsize=5, y_percent=0.08, fontsize_unit="percent"):
+    def _title_ffmpeg(self, input_path, output_path, font_path, title_text, fontsize=5, y_percent=0.08, fontsize_unit="percent", font_color="#ffffff"):
         """使用 FFmpeg drawtext 在视频指定高度居中位置烧录标题文字，支持自动换行"""
         try:
             safe_font = font_path.replace("\\", "/").replace(":", "\\:")
+
+            # 将 #rrggbb 转换为 ffmpeg 接受的 0xrrggbb 格式
+            if font_color.startswith("#"):
+                ffmpeg_color = "0x" + font_color[1:]
+            else:
+                ffmpeg_color = font_color
 
             video_width, video_height, _ = self.get_video_resolution_fps(input_path)
             if fontsize_unit == "percent":
@@ -2498,7 +2533,7 @@ class FFmpegVideoEditorApp:
                     f":x=(w-text_w)/2"
                     f":y={y_expr}"
                     f":fontsize={fontsize}"
-                    f":fontcolor=white"
+                    f":fontcolor={ffmpeg_color}"
                     f":borderw=3"
                     f":bordercolor=black@0.7"
                     f":shadowx=2:shadowy=2:shadowcolor=black@0.5"
