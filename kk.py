@@ -246,7 +246,8 @@ class FFmpegVideoEditorApp:
         self.title_video_folder = tk.StringVar()
         self.title_output_folder = tk.StringVar()
         self.title_font = tk.StringVar()
-        self.title_fontsize = tk.StringVar(value="30")
+        self.title_fontsize = tk.StringVar(value="5")
+        self.title_fontsize_unit = tk.StringVar(value="percent")  # "percent" 或 "px"
         self.title_y_percent = tk.StringVar(value="8")
         self.title_text = tk.StringVar()
         self.title_text_mode = tk.StringVar(value="fixed")  # "fixed" 或 "txt"
@@ -1180,7 +1181,20 @@ class FFmpegVideoEditorApp:
         size_frame = ttk.Frame(parent)
         size_frame.grid(row=4, column=1, padx=5, sticky='w')
         ttk.Entry(size_frame, textvariable=self.title_fontsize, width=8).pack(side='left')
-        ttk.Label(size_frame, text="px", foreground='gray').pack(side='left', padx=5)
+        _unit_px_defaults = {"percent": "5", "px": "30"}
+        def _on_fontsize_unit_change(*_):
+            unit = self.title_fontsize_unit.get()
+            size_unit_label.config(text="% 视频高度" if unit == "percent" else "px像素")
+            try:
+                float(self.title_fontsize.get())
+            except ValueError:
+                self.title_fontsize.set(_unit_px_defaults[unit])
+        ttk.Radiobutton(size_frame, text="%", variable=self.title_fontsize_unit,
+                        value="percent", command=lambda: (self.title_fontsize.set("5"), _on_fontsize_unit_change())).pack(side='left', padx=(6, 2))
+        ttk.Radiobutton(size_frame, text="px", variable=self.title_fontsize_unit,
+                        value="px", command=lambda: (self.title_fontsize.set("30"), _on_fontsize_unit_change())).pack(side='left', padx=(0, 4))
+        size_unit_label = ttk.Label(size_frame, text="% 视频高度", foreground='gray')
+        size_unit_label.pack(side='left')
 
         ttk.Label(parent, text="文字高度位置:").grid(row=5, column=0, sticky='w', padx=10, pady=5)
         ypos_frame = ttk.Frame(parent)
@@ -2139,10 +2153,15 @@ class FFmpegVideoEditorApp:
             output_folder = self.title_output_folder.get().strip()
             font_name = self.title_font.get()
             text_mode = self.title_text_mode.get()
+            fontsize_unit = self.title_fontsize_unit.get()
             try:
-                fontsize = max(10, int(self.title_fontsize.get()))
+                fontsize_val = max(1, float(self.title_fontsize.get()))
+                if fontsize_unit == "percent":
+                    fontsize_val = max(0.5, min(50.0, fontsize_val))
+                else:
+                    fontsize_val = max(10, int(fontsize_val))
             except ValueError:
-                fontsize = 30
+                fontsize_val = 5 if fontsize_unit == "percent" else 30
             try:
                 y_percent = max(0, min(90, float(self.title_y_percent.get()))) / 100
             except ValueError:
@@ -2216,7 +2235,7 @@ class FFmpegVideoEditorApp:
                 self.log(f"  标题: {current_title}")
 
                 try:
-                    ok = self._title_ffmpeg(video_path, output_path, font_path, current_title, fontsize, y_percent)
+                    ok = self._title_ffmpeg(video_path, output_path, font_path, current_title, fontsize_val, y_percent, fontsize_unit)
                 except RuntimeError as e:
                     if "__font_error__" in str(e):
                         self.log(f"✗ 字体加载失败，终止批处理")
@@ -2454,12 +2473,16 @@ class FFmpegVideoEditorApp:
 
         return lines if lines else [text]
 
-    def _title_ffmpeg(self, input_path, output_path, font_path, title_text, fontsize=30, y_percent=0.08):
+    def _title_ffmpeg(self, input_path, output_path, font_path, title_text, fontsize=5, y_percent=0.08, fontsize_unit="percent"):
         """使用 FFmpeg drawtext 在视频指定高度居中位置烧录标题文字，支持自动换行"""
         try:
             safe_font = font_path.replace("\\", "/").replace(":", "\\:")
 
-            video_width, _, _ = self.get_video_resolution_fps(input_path)
+            video_width, video_height, _ = self.get_video_resolution_fps(input_path)
+            if fontsize_unit == "percent":
+                fontsize = max(10, int(video_height * fontsize / 100))
+            else:
+                fontsize = max(10, int(fontsize))
             lines = self._wrap_title_text(title_text, fontsize, video_width)
 
             line_spacing = fontsize * 1.35  # 行间距
