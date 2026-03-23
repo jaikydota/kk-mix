@@ -3117,13 +3117,14 @@ class FFmpegVideoEditorApp:
                             tmp_name = f"tmp_{i:03d}_{k:02d}_{os.path.basename(src)}"
                             tmp_path = os.path.join(temp_dir, tmp_name)
                             if need_audio_fix:
-                                # 源文件无音频流：注入 lavfi 静音轨合并进来
                                 resize_cmd = [
                                     self.ffmpeg_path, '-i', src,
                                     '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
                                 ]
                                 if need_resize:
                                     resize_cmd += ['-vf', f"scale={ref_w}:{ref_h}:force_original_aspect_ratio=increase,crop={ref_w}:{ref_h},setsar=1"]
+                                else:
+                                    resize_cmd += ['-vf', 'setsar=1']
                                 resize_cmd += [
                                     '-r', str(ref_fps),
                                     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
@@ -3136,6 +3137,8 @@ class FFmpegVideoEditorApp:
                                 ]
                                 if need_resize:
                                     resize_cmd += ['-vf', f"scale={ref_w}:{ref_h}:force_original_aspect_ratio=increase,crop={ref_w}:{ref_h},setsar=1"]
+                                else:
+                                    resize_cmd += ['-vf', 'setsar=1']
                                 resize_cmd += [
                                     '-r', str(ref_fps),
                                     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
@@ -3200,8 +3203,10 @@ class FFmpegVideoEditorApp:
             if td <= 0:
                 # ── 无转场：用 concat filter 替代 -f concat demuxer ──
                 # concat filter 会统一时间基，避免帧率/时间戳不连续导致的卡顿
-                streams = ''.join(f'[{i}:v][{i}:a]' for i in range(n))
-                filter_complex = f'{streams}concat=n={n}:v=1:a=1[vout][aout]'
+                # 先对每个输入视频 setsar=1，避免 SAR 不一致导致 concat 失败
+                setsar = ';'.join(f'[{i}:v]setsar=1[sv{i}]' for i in range(n))
+                streams = ''.join(f'[sv{i}][{i}:a]' for i in range(n))
+                filter_complex = f'{setsar};{streams}concat=n={n}:v=1:a=1[vout][aout]'
                 cmd = [self.ffmpeg_path] + inputs + [
                     '-filter_complex', filter_complex,
                     '-map', '[vout]', '-map', '[aout]',
@@ -3229,8 +3234,9 @@ class FFmpegVideoEditorApp:
                 # 第二步：构建 filter_complex
                 # xfade offset = 前所有片段时长之和 - 已叠加的转场时长
                 # acrossfade 不需要 offset，直接链式连接即可
-                filter_parts = []
-                prev_v = '[0:v]'
+                # 先对每个输入视频 setsar=1，避免 SAR 不一致导致 xfade 失败
+                filter_parts = [f'[{i}:v]setsar=1[sv{i}]' for i in range(n)]
+                prev_v = '[sv0]'
                 prev_a = '[0:a]'
                 offset = 0.0
                 for i in range(1, n):
@@ -3239,7 +3245,7 @@ class FFmpegVideoEditorApp:
                     out_v = '[vout]' if is_last else f'[v{i}]'
                     out_a = '[aout]' if is_last else f'[a{i}]'
                     filter_parts.append(
-                        f"{prev_v}[{i}:v]xfade=transition={transition_type}"
+                        f"{prev_v}[sv{i}]xfade=transition={transition_type}"
                         f":duration={td:.3f}:offset={offset:.3f}{out_v}"
                     )
                     filter_parts.append(
