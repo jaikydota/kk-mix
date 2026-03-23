@@ -17,7 +17,7 @@ import shutil
 import speech_tab
 import settings_window
 
-VERSION = "v8.3.6"
+VERSION = "v8.4.0"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -33,7 +33,7 @@ VERSION_INFO = f"""\
 平台：Windows
 
 更新日志：
-• v8.3.6  视频添加标题支持自定义字体颜色
+• v8.4.0  视频添加标题支持自定义字体颜色
 • v8.3  增加批量视频裁剪尺寸功能
 • v8.2  增加视频添加标题功能，部分BUG修复
 • v8.1  填充音乐功能优化，支持智能循环/裁剪精确匹配视频时长
