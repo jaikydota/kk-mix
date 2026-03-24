@@ -517,6 +517,7 @@ name = "han-mix"
 version = "7.0.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "fastmcp" },
     { name = "moviepy" },
     { name = "numpy" },
@@ -531,6 +532,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=44.0.0" },
     { name = "fastmcp", specifier = ">=3.1.0" },
     { name = "moviepy", specifier = "==1.0.3" },
     { name = "numpy", specifier = "==2.0.2" },
