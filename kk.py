@@ -56,9 +56,9 @@ class LicenseManager:
     def __init__(self, app_name="REDACTED-SEED"):
         self.app_name = app_name
         self.secret_key = self._generate_key()
-        self.license_file = os.path.join(
-            os.path.dirname(os.path.abspath(sys.argv[0])), ".video_license"
-        )
+        app_data = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "vek")
+        os.makedirs(app_data, exist_ok=True)
+        self.license_file = os.path.join(app_data, ".vek_li")
 
     def _generate_key(self):
         key_base = hashlib.sha256(self.app_name.encode()).digest()
