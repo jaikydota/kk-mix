@@ -6,7 +6,8 @@ import json
 import time
 import gc
 import subprocess
-from datetime import datetime
+import hashlib
+from datetime import datetime, timedelta
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -14,10 +15,13 @@ import threading
 import numpy as np
 from PIL import Image, ImageTk
 import shutil
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding as crypto_padding
+from cryptography.hazmat.backends import default_backend
 import speech_tab
 import settings_window
 
-VERSION = "v8.4.0"
+VERSION = "v9.0.0"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -33,12 +37,162 @@ VERSION_INFO = f"""\
 平台：Windows
 
 更新日志：
-• v8.4.0  视频添加标题支持自定义字体颜色
+• v9.0  增加授权码登录
+• v8.4  视频添加标题支持自定义字体颜色
 • v8.3  增加批量视频裁剪尺寸功能
 • v8.2  增加视频添加标题功能，部分BUG修复
 • v8.1  填充音乐功能优化，支持智能循环/裁剪精确匹配视频时长
 • v1-8  基础合并/分割功能等
 """
+
+
+# ─────────────────────────────────────────────────────────────
+# 授权管理器
+# ─────────────────────────────────────────────────────────────
+
+class LicenseManager:
+    """授权管理器 - 授权码验证"""
+
+    def __init__(self, app_name="REDACTED-SEED"):
+        self.app_name = app_name
+        self.secret_key = self._generate_key()
+        self.license_file = os.path.join(
+            os.path.dirname(os.path.abspath(sys.argv[0])), ".video_license"
+        )
+
+    def _generate_key(self):
+        key_base = hashlib.sha256(self.app_name.encode()).digest()
+        return key_base[:32]
+
+    def _encrypt_data(self, data):
+        try:
+            iv = os.urandom(16)
+            cipher = Cipher(algorithms.AES(self.secret_key), modes.CBC(iv), backend=default_backend())
+            encryptor = cipher.encryptor()
+            padder = crypto_padding.PKCS7(128).padder()
+            padded_data = padder.update(data.encode()) + padder.finalize()
+            encrypted = encryptor.update(padded_data) + encryptor.finalize()
+            return base64.b64encode(iv + encrypted).decode()
+        except Exception:
+            return None
+
+    def _decrypt_data(self, encrypted_data):
+        try:
+            decoded = base64.b64decode(encrypted_data.encode())
+            iv = decoded[:16]
+            encrypted = decoded[16:]
+            cipher = Cipher(algorithms.AES(self.secret_key), modes.CBC(iv), backend=default_backend())
+            decryptor = cipher.decryptor()
+            padded_data = decryptor.update(encrypted) + decryptor.finalize()
+            unpadder = crypto_padding.PKCS7(128).unpadder()
+            data = unpadder.update(padded_data) + unpadder.finalize()
+            return data.decode()
+        except Exception:
+            return None
+
+    def verify_auth_code(self, auth_code):
+        try:
+            decrypted_data = self._decrypt_data(auth_code)
+            if not decrypted_data:
+                return False, "授权码无效或损坏，请联系管理员"
+            license_info = json.loads(decrypted_data)
+            expire_date_str = license_info.get("expire_date")
+            expire_date = datetime.strptime(expire_date_str, "%Y-%m-%d %H:%M:%S")
+            now = datetime.now()
+            create_date_str = license_info.get("create_date")
+            if create_date_str:
+                create_date = datetime.strptime(create_date_str, "%Y-%m-%d %H:%M:%S")
+                if now < create_date:
+                    return False, "系统时间异常，请检查系统时间设置"
+            if now > expire_date:
+                return False, f"授权码已过期（过期时间：{expire_date_str}）"
+            days_left = (expire_date - now).days
+            return True, f"授权验证成功，剩余 {days_left} 天"
+        except Exception as e:
+            return False, f"授权码验证失败: {str(e)}"
+
+    def save_license(self, auth_code):
+        try:
+            encrypted = self._encrypt_data(auth_code)
+            with open(self.license_file, 'w') as f:
+                f.write(encrypted)
+            return True
+        except Exception:
+            return False
+
+    def load_license(self):
+        if not os.path.exists(self.license_file):
+            return None
+        try:
+            with open(self.license_file, 'r') as f:
+                encrypted = f.read()
+            return self._decrypt_data(encrypted)
+        except Exception:
+            return None
+
+
+def show_license_dialog(root):
+    """显示授权验证对话框，返回 True 表示授权通过"""
+    lm = LicenseManager()
+
+    saved_code = lm.load_license()
+    if saved_code:
+        ok, msg = lm.verify_auth_code(saved_code)
+        if ok:
+            return True
+
+    result = {"authorized": False}
+
+    dialog = tk.Toplevel(root)
+    dialog.title("软件授权验证")
+    dialog.geometry("480x260")
+    dialog.resizable(False, False)
+    dialog.transient(root)
+    dialog.grab_set()
+
+    icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
+    if os.path.exists(icon_path):
+        dialog.iconbitmap(icon_path)
+
+    dialog.protocol("WM_DELETE_WINDOW", lambda: (result.update(authorized=False), dialog.destroy()))
+
+    frame = ttk.Frame(dialog, padding=20)
+    frame.pack(fill='both', expand=True)
+
+    ttk.Label(frame, text="请输入授权码", font=('Microsoft YaHei', 14, 'bold')).pack(pady=(0, 5))
+    ttk.Label(frame, text="首次使用需要输入授权码，请联系管理员获取", foreground='gray').pack(pady=(0, 15))
+
+    code_var = tk.StringVar()
+    code_entry = ttk.Entry(frame, textvariable=code_var, width=50, font=('Consolas', 10))
+    code_entry.pack(pady=(0, 5))
+
+    status_label = ttk.Label(frame, text="", foreground='red')
+    status_label.pack(pady=(0, 10))
+
+    def do_verify():
+        code = code_var.get().strip()
+        if not code:
+            status_label.config(text="请输入授权码", foreground='red')
+            return
+        ok, msg = lm.verify_auth_code(code)
+        if ok:
+            lm.save_license(code)
+            result["authorized"] = True
+            status_label.config(text=msg, foreground='green')
+            dialog.after(600, dialog.destroy)
+        else:
+            status_label.config(text=msg, foreground='red')
+
+    btn_frame = ttk.Frame(frame)
+    btn_frame.pack(pady=(5, 0))
+    ttk.Button(btn_frame, text="验证授权", command=do_verify, style='Accent.TButton').pack(side='left', padx=5)
+    ttk.Button(btn_frame, text="退出", command=lambda: (result.update(authorized=False), dialog.destroy())).pack(side='left', padx=5)
+
+    code_entry.focus_set()
+    code_entry.bind('<Return>', lambda e: do_verify())
+
+    root.wait_window(dialog)
+    return result["authorized"]
 
 
 # ─────────────────────────────────────────────────────────────
@@ -4024,6 +4178,12 @@ def main():
     style = ttk.Style()
     style.configure('Accent.TButton', font=('Microsoft YaHei', 10, 'bold'))
 
+    root.withdraw()
+    if not show_license_dialog(root):
+        root.destroy()
+        return
+
+    root.deiconify()
     app = FFmpegVideoEditorApp(root)
     root.mainloop()
 
