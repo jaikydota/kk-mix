@@ -635,6 +635,10 @@ class FFmpegVideoEditorApp:
         except Exception as e:
             messagebox.showerror("导出失败", f"写入文件失败：{e}")
 
+    def _preset(self) -> str:
+        """根据极速模式设置返回编码预设。"""
+        return 'ultrafast' if self.speed_priority.get() else 'medium'
+
     def _quality_args(self) -> list:
         """根据压缩视频设置返回码率控制参数列表。"""
         if self.compress_video.get():
@@ -1712,7 +1716,7 @@ class FFmpegVideoEditorApp:
                 '-i', input_path,
                 '-vf', vf_filter,
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-preset', self._preset(),
                 *self._quality_args(),
                 '-c:a', 'copy',  # 音频直接复制
                 '-threads', '0',
@@ -1850,7 +1854,7 @@ class FFmpegVideoEditorApp:
                 '-map', '[v]',
                 '-map', '0:a',
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-preset', self._preset(),
                 *self._quality_args(),
                 '-c:a', 'copy',  # 音频直接复制
                 '-threads', '0',
@@ -2051,7 +2055,7 @@ class FFmpegVideoEditorApp:
                 self.ffmpeg_path,
                 '-i', input_path,
                 '-c:v', video_codec,
-                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-preset', self._preset(),
                 *self._quality_args(),
                 '-c:a', audio_codec,
                 '-threads', '0',
@@ -2652,7 +2656,7 @@ class FFmpegVideoEditorApp:
                 '-i', input_path,
                 '-vf', crop_filter,
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-preset', self._preset(),
                 *self._quality_args(),
                 '-c:a', 'copy',
                 '-y',
@@ -2771,7 +2775,7 @@ class FFmpegVideoEditorApp:
                 '-i', input_path,
                 '-vf', drawtext,
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-preset', self._preset(),
                 *self._quality_args(),
                 '-c:a', 'copy',
                 '-y',
@@ -3039,7 +3043,7 @@ class FFmpegVideoEditorApp:
                 '-ss', str(start_time),
                 '-t', str(duration),
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-preset', self._preset(),
                 *self._quality_args(),
                 '-c:a', 'aac',
                 '-threads', '0',
@@ -3150,7 +3154,7 @@ class FFmpegVideoEditorApp:
                     '-filter_complex', filter_complex,
                     '-map', '[v]'] + map_audio + [
                     '-c:v', 'libx264',
-                    '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                    '-preset', self._preset(),
                     *self._quality_args(),
                     '-threads', '0',
                     '-y',
@@ -3229,7 +3233,7 @@ class FFmpegVideoEditorApp:
             
             # 导出（ImageClip 无 fps，显式指定兜底）
             output_fps = getattr(clip1, 'fps', None) or getattr(clip2, 'fps', None) or 24
-            preset = 'ultrafast' if self.speed_priority.get() else 'medium'
+            preset = self._preset()
             final.write_videofile(output_path, fps=output_fps, codec='libx264', preset=preset, logger=None)
             
             # 清理
@@ -3314,7 +3318,7 @@ class FFmpegVideoEditorApp:
                     # xfade 要求所有输入 timebase 一致；只要有视频被重编码，
                     # 第一个视频也必须同样重编码，否则原始 tbn 与重编码后 tbn 不同
                     normalized_videos = []
-                    preset = 'ultrafast' if self.speed_priority.get() else 'medium'
+                    preset = self._preset()
                     for k in range(len(group_videos)):
                         src = group_videos[k]
                         if k == 0:
@@ -3418,7 +3422,7 @@ class FFmpegVideoEditorApp:
             td = self.concat_transition.get()
             _tt_raw = self.concat_transition_type.get() or '淡入淡出-fade'
             transition_type = _tt_raw.split('-')[-1] if '-' in _tt_raw else _tt_raw
-            preset = 'ultrafast' if self.speed_priority.get() else 'medium'
+            preset = self._preset()
 
             def run_cmd(cmd):
                 return self._run_cmd(cmd, timeout=900)
@@ -3618,7 +3622,7 @@ class FFmpegVideoEditorApp:
                 '-map', '[v]',
                 '-map', '0:a',  # 使用背景音频
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-preset', self._preset(),
                 *self._quality_args(),
                 '-c:a', 'copy',
                 '-threads', '0',
@@ -3734,7 +3738,7 @@ class FFmpegVideoEditorApp:
                 '-vf', vf_str,
                 '-af', af_str,
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-preset', self._preset(),
                 *self._quality_args(),
                 '-c:a', 'aac',
                 '-threads', '0',
@@ -4001,7 +4005,7 @@ class FFmpegVideoEditorApp:
                 "-map", "0:v:0", "-map", "1:a:0",
                 "-vf", f"ass={ass_escaped}",
                 "-c:v", "libx264",
-                "-preset", "ultrafast" if self.speed_priority.get() else "medium",
+                "-preset", self._preset(),
                 *self._quality_args(),
                 "-c:a", "aac", "-b:a", "192k",
                 "-threads", "0",
