@@ -21,7 +21,7 @@ from cryptography.hazmat.backends import default_backend
 import speech_tab
 import settings_window
 
-VERSION = "v9.0.0"
+VERSION = "v9.2.0"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
