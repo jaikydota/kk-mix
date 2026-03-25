@@ -154,7 +154,7 @@ def open_settings(app):
 
     ttk.Checkbutton(
         perf_section,
-        text="极速模式（ultrafast，编码速度更快，文件稍大）",
+        text="极速模式（ultrafast，编码速度更快，清晰度略有下滑）",
         variable=app.speed_priority,
     ).grid(row=1, column=0, columnspan=3, sticky="w", padx=12, pady=4)
 
