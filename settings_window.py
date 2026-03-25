@@ -39,6 +39,8 @@ def load_settings(app):
         app.verbose_log.set(data.get("verbose_log", False))
         app.thread_count.set(str(data.get("thread_count", "1")))
         app.speed_priority.set(data.get("speed_priority", True))
+        app.compress_video.set(data.get("compress_video", False))
+        app.bitrate.set(data.get("bitrate", "2M"))
     except Exception:
         pass
 
@@ -54,6 +56,8 @@ def _save_settings(app):
         "verbose_log": app.verbose_log.get(),
         "thread_count": app.thread_count.get(),
         "speed_priority": app.speed_priority.get(),
+        "compress_video": app.compress_video.get(),
+        "bitrate": app.bitrate.get(),
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -63,14 +67,14 @@ def open_settings(app):
     """打开全局设置窗口"""
     win = tk.Toplevel(app.root)
     win.title("全局设置")
-    win.geometry("480x570")
+    win.geometry("480x680")
     win.resizable(False, False)
     win.grab_set()  # 模态
 
     # 使窗口居中于主窗口
     app.root.update_idletasks()
     rx = app.root.winfo_x() + (app.root.winfo_width() - 480) // 2
-    ry = app.root.winfo_y() + (app.root.winfo_height() - 540) // 2
+    ry = app.root.winfo_y() + (app.root.winfo_height() - 680) // 2
     win.geometry(f"+{rx}+{ry}")
 
     icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
@@ -157,6 +161,72 @@ def open_settings(app):
         text="极速模式（ultrafast，编码速度更快，清晰度略有下滑）",
         variable=app.speed_priority,
     ).grid(row=1, column=0, columnspan=3, sticky="w", padx=12, pady=4)
+
+    # 压缩视频（码率控制）
+    compress_cb = ttk.Checkbutton(
+        perf_section,
+        text="压缩视频",
+        variable=app.compress_video,
+    )
+    compress_cb.grid(row=2, column=0, columnspan=3, sticky="w", padx=12, pady=(8, 2))
+
+    bitrate_frame = ttk.Frame(perf_section)
+    bitrate_frame.grid(row=3, column=0, columnspan=3, sticky="w", padx=32, pady=2)
+
+    ttk.Label(bitrate_frame, text="设置码率:").pack(side="left")
+    bitrate_combo = ttk.Combobox(
+        bitrate_frame, textvariable=app.bitrate, width=12,
+        values=["2M（推荐）", "3M", "5M", "8M"],
+    )
+    bitrate_combo.pack(side="left", padx=5)
+
+    def _on_bitrate_selected(event):
+        val = app.bitrate.get()
+        if "（" in val:
+            app.bitrate.set(val.split("（")[0])
+
+    bitrate_combo.bind("<<ComboboxSelected>>", _on_bitrate_selected)
+
+    def _validate_bitrate(*_args):
+        raw = app.bitrate.get().strip().upper()
+        if not raw:
+            return
+        num_str = raw.rstrip("M")
+        try:
+            num = int(num_str)
+            if num > 50:
+                app.bitrate.set("50M")
+            elif not raw.endswith("M"):
+                app.bitrate.set(f"{num}M")
+        except ValueError:
+            pass
+
+    bitrate_combo.bind("<FocusOut>", _validate_bitrate)
+
+    ttk.Label(
+        bitrate_frame,
+        text="最大50M",
+        foreground="gray",
+        font=("", 9),
+    ).pack(side="left", padx=4)
+
+    ttk.Label(
+        perf_section,
+        text="码率越大视频清晰度越高，但不会超过原素材清晰度",
+        foreground="gray",
+        font=("", 9),
+    ).grid(row=4, column=0, columnspan=3, sticky="w", padx=32, pady=(0, 4))
+
+    def _toggle_bitrate_ui():
+        state = "normal" if app.compress_video.get() else "disabled"
+        for child in bitrate_frame.winfo_children():
+            try:
+                child.configure(state=state)
+            except tk.TclError:
+                pass
+
+    compress_cb.configure(command=_toggle_bitrate_ui)
+    _toggle_bitrate_ui()
 
     # ── 按钮区 ────────────────────────────────────
     btn_frame = ttk.Frame(win)
