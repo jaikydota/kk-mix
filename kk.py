@@ -3314,6 +3314,7 @@ class FFmpegVideoEditorApp:
                     # xfade 要求所有输入 timebase 一致；只要有视频被重编码，
                     # 第一个视频也必须同样重编码，否则原始 tbn 与重编码后 tbn 不同
                     normalized_videos = []
+                    preset = 'ultrafast' if self.speed_priority.get() else 'medium'
                     for k in range(len(group_videos)):
                         src = group_videos[k]
                         if k == 0:
@@ -3354,7 +3355,7 @@ class FFmpegVideoEditorApp:
                                     resize_cmd += ['-vf', 'setsar=1']
                                 resize_cmd += [
                                     '-r', str(ref_fps),
-                                    '-c:v', 'libx264', '-preset', 'ultrafast', *self._quality_args(),
+                                    '-c:v', 'libx264', '-preset', preset, *self._quality_args(),
                                     '-c:a', 'aac', '-shortest',
                                     '-threads', '0', '-y', tmp_path,
                                 ]
@@ -3368,7 +3369,7 @@ class FFmpegVideoEditorApp:
                                     resize_cmd += ['-vf', 'setsar=1']
                                 resize_cmd += [
                                     '-r', str(ref_fps),
-                                    '-c:v', 'libx264', '-preset', 'ultrafast', *self._quality_args(),
+                                    '-c:v', 'libx264', '-preset', preset, *self._quality_args(),
                                     '-c:a', 'aac', '-threads', '0', '-y', tmp_path,
                                 ]
                             res = self._run_cmd(resize_cmd, timeout=600)
