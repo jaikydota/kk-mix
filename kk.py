@@ -2645,6 +2645,7 @@ class FFmpegVideoEditorApp:
                 '-vf', crop_filter,
                 '-c:v', 'libx264',
                 '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-crf', '23',
                 '-c:a', 'copy',
                 '-y',
                 output_path
@@ -2763,6 +2764,7 @@ class FFmpegVideoEditorApp:
                 '-vf', drawtext,
                 '-c:v', 'libx264',
                 '-preset', 'ultrafast' if self.speed_priority.get() else 'medium',
+                '-crf', '23',
                 '-c:a', 'copy',
                 '-y',
                 output_path
@@ -3219,7 +3221,8 @@ class FFmpegVideoEditorApp:
             
             # 导出（ImageClip 无 fps，显式指定兜底）
             output_fps = getattr(clip1, 'fps', None) or getattr(clip2, 'fps', None) or 24
-            final.write_videofile(output_path, fps=output_fps, codec='libx264', preset='ultrafast', logger=None)
+            preset = 'ultrafast' if self.speed_priority.get() else 'medium'
+            final.write_videofile(output_path, fps=output_fps, codec='libx264', preset=preset, logger=None)
             
             # 清理
             clip1.close()
