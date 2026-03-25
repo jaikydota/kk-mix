@@ -176,7 +176,7 @@ def open_settings(app):
     ttk.Label(bitrate_frame, text="设置码率:").pack(side="left")
     bitrate_combo = ttk.Combobox(
         bitrate_frame, textvariable=app.bitrate, width=12,
-        values=["2M（推荐）", "3M", "5M", "8M"],
+        values=["1M", "2M（推荐）", "3M", "5M", "8M", "10M"],
     )
     bitrate_combo.pack(side="left", padx=5)
 
