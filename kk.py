@@ -36,12 +36,14 @@ VERSION_INFO = f"""\
 版本：{VERSION}
 平台：Windows
 
-更新日志：
+更新日志（只记录大功能迭代）：
+• v9.2  增加视频压缩功能
+• v9.1  增加批量裁剪图片功能
 • v9.0  增加授权码登录
 • v8.4  视频添加标题支持自定义字体颜色
 • v8.3  增加批量视频裁剪尺寸功能
-• v8.2  增加视频添加标题功能，部分BUG修复
-• v8.1  填充音乐功能优化，支持智能循环/裁剪精确匹配视频时长
+• v8.2  增加视频添加标题功能
+• v8.1  增加批量填充音乐功能优化
 • v1-8  基础合并/分割功能等
 """
 
@@ -413,6 +415,7 @@ class FFmpegVideoEditorApp:
         self.crop_video_folder = tk.StringVar()
         self.crop_output_folder = tk.StringVar()
         self.crop_ratio = tk.StringVar(value="9:16")
+        self.crop_mode = tk.StringVar(value="video")  # "video" 或 "image"
 
         # 视频配音变量
         self.speech_video_folder = tk.StringVar()
@@ -761,6 +764,18 @@ class FFmpegVideoEditorApp:
             self.log(f"  示例: {files[:3]}")
         return sorted(files)
         
+    def get_image_files(self, folder):
+        """仅获取图片文件"""
+        if not os.path.exists(folder):
+            self.log(f"错误：文件夹不存在 {folder}")
+            return []
+
+        files = [f for f in os.listdir(folder) if Path(f).suffix.lower() in self.image_extensions]
+        self.log(f"扫描图片文件夹: 发现 {len(files)} 个图片文件")
+        if files:
+            self.log(f"  示例: {files[:3]}")
+        return sorted(files)
+
     def get_media_files(self, folder):
         """获取所有媒体文件"""
         if not os.path.exists(folder):
@@ -1430,24 +1445,30 @@ class FFmpegVideoEditorApp:
 
     def create_crop_tab(self, parent):
         """创建批量裁剪比例标签页"""
-        ttk.Label(parent, text="视频文件夹:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
-        ttk.Entry(parent, textvariable=self.crop_video_folder).grid(row=0, column=1, padx=5, sticky='ew')
-        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.crop_video_folder)).grid(row=0, column=2, padx=5)
+        ttk.Label(parent, text="裁剪类型:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        mode_frame = ttk.Frame(parent)
+        mode_frame.grid(row=0, column=1, padx=5, sticky='w')
+        ttk.Radiobutton(mode_frame, text="批量裁剪视频", variable=self.crop_mode, value="video").pack(side='left', padx=6)
+        ttk.Radiobutton(mode_frame, text="批量裁剪图片", variable=self.crop_mode, value="image").pack(side='left', padx=6)
 
-        ttk.Label(parent, text="输出文件夹:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
-        ttk.Entry(parent, textvariable=self.crop_output_folder).grid(row=1, column=1, padx=5, sticky='ew')
-        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.crop_output_folder, True)).grid(row=1, column=2, padx=5)
+        ttk.Label(parent, text="源文件夹:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.crop_video_folder).grid(row=1, column=1, padx=5, sticky='ew')
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.crop_video_folder)).grid(row=1, column=2, padx=5)
 
-        ttk.Label(parent, text="目标比例:").grid(row=2, column=0, sticky='w', padx=10, pady=5)
+        ttk.Label(parent, text="输出文件夹:").grid(row=2, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.crop_output_folder).grid(row=2, column=1, padx=5, sticky='ew')
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.crop_output_folder, True)).grid(row=2, column=2, padx=5)
+
+        ttk.Label(parent, text="目标比例:").grid(row=3, column=0, sticky='w', padx=10, pady=5)
         ratio_frame = ttk.Frame(parent)
-        ratio_frame.grid(row=2, column=1, padx=5, sticky='w')
+        ratio_frame.grid(row=3, column=1, padx=5, sticky='w')
         for ratio in ("9:16", "16:9", "18:9", "1:1", "4:3", "3:4", "21:9"):
             ttk.Radiobutton(ratio_frame, text=ratio, variable=self.crop_ratio, value=ratio).pack(side='left', padx=6)
 
         ttk.Label(parent, text="💡 以居中方式裁剪，超出目标比例的四边内容将被裁掉，不会拉伸画面。",
-                  foreground='gray').grid(row=3, column=0, columnspan=3, sticky='w', padx=12, pady=(0, 4))
+                  foreground='gray').grid(row=4, column=0, columnspan=3, sticky='w', padx=12, pady=(0, 4))
 
-        ttk.Button(parent, text="批量裁剪", command=self.start_crop, style='Accent.TButton').grid(row=4, column=0, columnspan=3, pady=15)
+        ttk.Button(parent, text="批量裁剪", command=self.start_crop, style='Accent.TButton').grid(row=5, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
 
     # 常见中文字体：注册表英文名 → 中文名（用于下拉框显示）
@@ -2480,18 +2501,21 @@ class FFmpegVideoEditorApp:
             self.set_controls_state(False)
 
     def batch_crop_operation(self):
-        """批量居中裁剪视频为指定比例"""
+        """批量居中裁剪视频/图片为指定比例"""
         self.current_operation = "crop"
         self.set_controls_state(True)
         self.progress_var.set(0)
 
         try:
-            video_folder = self.crop_video_folder.get().strip()
+            source_folder = self.crop_video_folder.get().strip()
             output_folder = self.crop_output_folder.get().strip()
             ratio_str = self.crop_ratio.get().strip()
+            mode = self.crop_mode.get()
+            is_image = (mode == "image")
+            type_label = "图片" if is_image else "视频"
 
-            if not video_folder:
-                messagebox.showerror("错误", "请选择视频文件夹！")
+            if not source_folder:
+                messagebox.showerror("错误", f"请选择{type_label}文件夹！")
                 return
 
             if not ratio_str or ':' not in ratio_str:
@@ -2504,45 +2528,55 @@ class FFmpegVideoEditorApp:
                 messagebox.showerror("错误", f"比例格式不正确：{ratio_str}")
                 return
 
-            video_files = self.get_video_files(video_folder)
-            if not video_files:
-                messagebox.showerror("错误", "文件夹中没有找到视频文件！")
+            if is_image:
+                files = self.get_image_files(source_folder)
+            else:
+                files = self.get_video_files(source_folder)
+            if not files:
+                messagebox.showerror("错误", f"文件夹中没有找到{type_label}文件！")
                 return
 
             if not output_folder:
-                output_folder = os.path.join(video_folder, "crop_output")
+                output_folder = os.path.join(source_folder, "crop_output")
             os.makedirs(output_folder, exist_ok=True)
 
             self.log(f"\n{'='*60}")
-            self.log(f"开始批量裁剪比例")
-            self.log(f"视频数: {len(video_files)} 个")
+            self.log(f"开始批量裁剪{type_label}比例")
+            self.log(f"{type_label}数: {len(files)} 个")
             self.log(f"目标比例: {ratio_str}")
             self.log(f"{'='*60}\n")
 
             success_count = 0
 
-            for idx, video_file in enumerate(video_files, 1):
+            for idx, file_name in enumerate(files, 1):
                 if self.check_pause_stop():
                     break
 
-                video_path = os.path.join(video_folder, video_file)
-                output_name = f"crop_{ratio_str.replace(':', 'x')}_{idx:03d}_{Path(video_file).stem}.mp4"
-                output_path = os.path.join(output_folder, output_name)
+                file_path = os.path.join(source_folder, file_name)
 
-                self.log(f"\n[{idx}/{len(video_files)}] 处理: {video_file}")
+                if is_image:
+                    ext = Path(file_name).suffix.lower()
+                    output_name = f"crop_{ratio_str.replace(':', 'x')}_{idx:03d}_{Path(file_name).stem}{ext}"
+                    output_path = os.path.join(output_folder, output_name)
+                    self.log(f"\n[{idx}/{len(files)}] 处理: {file_name}")
+                    ok = self._crop_image(file_path, output_path, rw, rh)
+                else:
+                    output_name = f"crop_{ratio_str.replace(':', 'x')}_{idx:03d}_{Path(file_name).stem}.mp4"
+                    output_path = os.path.join(output_folder, output_name)
+                    self.log(f"\n[{idx}/{len(files)}] 处理: {file_name}")
+                    ok = self._crop_ffmpeg(file_path, output_path, rw, rh)
 
-                ok = self._crop_ffmpeg(video_path, output_path, rw, rh)
                 if ok:
                     success_count += 1
                     self.log(f"✓ 成功: {output_name}")
                 else:
-                    self.log(f"✗ 失败: {video_file}")
+                    self.log(f"✗ 失败: {file_name}")
 
-                self.progress_var.set((idx / len(video_files)) * 100)
-                self.update_status(f"裁剪比例中... {idx}/{len(video_files)}")
+                self.progress_var.set((idx / len(files)) * 100)
+                self.update_status(f"裁剪{type_label}中... {idx}/{len(files)}")
 
             self.log(f"\n{'='*60}")
-            self.log(f"完成！成功处理 {success_count}/{len(video_files)} 个视频")
+            self.log(f"完成！成功处理 {success_count}/{len(files)} 个{type_label}")
             self.log(f"输出目录: {output_folder}")
             self.log(f"{'='*60}")
 
@@ -2557,7 +2591,7 @@ class FFmpegVideoEditorApp:
                     icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
                     if os.path.exists(icon_path):
                         dlg.iconbitmap(icon_path)
-                    tk.Label(dlg, text=f"成功处理 {success_count} 个视频！\n输出目录: {output_folder}",
+                    tk.Label(dlg, text=f"成功处理 {success_count} 个{type_label}！\n输出目录: {output_folder}",
                              padx=20, pady=15, justify="left").pack()
                     btn_frame = tk.Frame(dlg, pady=8)
                     btn_frame.pack()
@@ -2619,6 +2653,34 @@ class FFmpegVideoEditorApp:
             return result.returncode == 0
         except Exception as e:
             self.log(f"  ffmpeg 错误: {e}")
+            return False
+
+    def _crop_image(self, input_path, output_path, ratio_w, ratio_h):
+        """居中裁剪图片到指定宽高比，不拉伸画面"""
+        try:
+            with Image.open(input_path) as img:
+                src_w, src_h = img.size
+                src_ratio = src_w / src_h
+                target_ratio = ratio_w / ratio_h
+
+                if abs(src_ratio - target_ratio) < 0.001:
+                    crop_box = (0, 0, src_w, src_h)
+                elif src_ratio > target_ratio:
+                    new_w = int(src_h * ratio_w / ratio_h)
+                    x = (src_w - new_w) // 2
+                    crop_box = (x, 0, x + new_w, src_h)
+                else:
+                    new_h = int(src_w * ratio_h / ratio_w)
+                    y = (src_h - new_h) // 2
+                    crop_box = (0, y, src_w, y + new_h)
+
+                cropped = img.crop(crop_box)
+                if img.mode == 'RGBA' and Path(output_path).suffix.lower() in ('.jpg', '.jpeg', '.bmp'):
+                    cropped = cropped.convert('RGB')
+                cropped.save(output_path, quality=95)
+            return True
+        except Exception as e:
+            self.log(f"  图片裁剪错误: {e}")
             return False
 
     def _wrap_title_text(self, text, fontsize, video_width, margin_ratio=0.08):
