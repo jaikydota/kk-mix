@@ -22,7 +22,7 @@ import requests
 import speech_tab
 import settings_window
 
-VERSION = "v9.2.0"
+VERSION = "v9.4.0"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -38,6 +38,8 @@ VERSION_INFO = f"""\
 平台：Windows
 
 更新日志（只记录大功能迭代）：
+• v9.4  增加用户登录授权功能
+• v9.3  增加使用前必读
 • v9.2  增加视频压缩功能
 • v9.1  增加批量裁剪图片功能
 • v9.0  增加授权码登录
@@ -826,8 +828,8 @@ class FFmpegVideoEditorApp:
             ("填充音乐",    "music"),
             ("视频添加标题", "title"),
             ("批量裁剪比例", "crop"),
-            ("视频配音(后续开放)",    "speech"),
-            ("视频翻译(后续开放)",    "translate"),
+            # ("视频配音(后续开放)",    "speech"),   # 暂时隐藏
+            # ("视频翻译(后续开放)",    "translate"), # 暂时隐藏
         ]
         CREATE_MAP = {
             "merge":     self.create_merge_tab,
@@ -843,8 +845,8 @@ class FFmpegVideoEditorApp:
             "music":     self.create_music_tab,
             "title":     self.create_title_tab,
             "crop":      self.create_crop_tab,
-            "speech":    lambda f: speech_tab.create_speech_tab(self, f),
-            "translate": self.create_translate_tab,
+            # "speech":    lambda f: speech_tab.create_speech_tab(self, f),  # 暂时隐藏
+            # "translate": self.create_translate_tab,                         # 暂时隐藏
         }
 
         for row_tabs in [ROW1, ROW2]:
