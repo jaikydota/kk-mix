@@ -199,6 +199,142 @@ VERSION_INFO = f"""\
 
 
 # ─────────────────────────────────────────────────────────────
+# 首次启动必读协议弹框
+# ─────────────────────────────────────────────────────────────
+
+_README_FLAG = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "vek", ".vek_readme_read")
+_READ_SECONDS = 10  # 最少阅读秒数
+
+
+def show_readme_dialog(root) -> bool:
+    """首次启动显示使用前必看，需阅读 ≥10 秒且滚动到底部才可继续。返回 False 表示用户直接退出。"""
+    if os.path.exists(_README_FLAG):
+        return True
+
+    readme_path = _resource_path(os.path.join('docs', '使用前必看.txt'))
+    try:
+        with open(readme_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except Exception:
+        return True  # 文件不存在则跳过
+
+    result = {"confirmed": False}
+
+    dialog = tk.Toplevel(root)
+    dialog.title("使用前必看 — 请仔细阅读后方可使用")
+    dialog.resizable(False, False)
+    dialog.transient(root)
+    dialog.grab_set()
+    # 禁止直接点 × 关闭（只能点退出按钮）
+    dialog.protocol("WM_DELETE_WINDOW", lambda: None)
+
+    icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
+    if os.path.exists(icon_path):
+        dialog.iconbitmap(icon_path)
+
+    frame = ttk.Frame(dialog, padding=(24, 18, 24, 18))
+    frame.pack(fill='both', expand=True)
+
+    ttk.Label(frame, text="使用前必看", font=('Microsoft YaHei', 13, 'bold')).pack(anchor='w')
+    ttk.Label(
+        frame,
+        text="请完整阅读以下内容，满足以下两个条件后方可进入使用：\n"
+             "① 阅读时间不少于 10 秒  ② 滚动文本到最底部",
+        foreground='#e67e00', wraplength=520, justify='left',
+    ).pack(anchor='w', pady=(6, 12))
+
+    # 文本区 + 滚动条
+    text_frame = ttk.Frame(frame)
+    text_frame.pack(fill='both', expand=True)
+    scrollbar = ttk.Scrollbar(text_frame)
+    scrollbar.pack(side='right', fill='y')
+    text_box = tk.Text(
+        text_frame, yscrollcommand=scrollbar.set, wrap='word',
+        font=('Microsoft YaHei', 10), height=18, width=64,
+        state='normal', relief='solid', bd=1,
+        bg='#fafafa', padx=14, pady=10,
+    )
+    text_box.insert('1.0', content)
+    text_box.config(state='disabled')
+    text_box.pack(side='left', fill='both', expand=True)
+    scrollbar.config(command=text_box.yview)
+
+    # 进度提示
+    status_var = tk.StringVar(value=f"⏳ 请阅读内容，还需等待 {_READ_SECONDS} 秒…")
+    status_label = ttk.Label(frame, textvariable=status_var, foreground='#c0392b', wraplength=520, justify='center')
+    status_label.pack(pady=(12, 8))
+
+    btn_row = ttk.Frame(frame)
+    btn_row.pack()
+    confirm_btn = ttk.Button(btn_row, text="✓  我已阅读，进入使用", style='Accent.TButton', state='disabled')
+    confirm_btn.pack(side='left', padx=6)
+    ttk.Button(btn_row, text="退  出",
+               command=lambda: (result.update(confirmed=False), dialog.destroy())).pack(side='left', padx=6)
+
+    state = {"time_ok": False, "scroll_ok": False, "seconds_left": _READ_SECONDS}
+
+    def _check_enable():
+        if state["time_ok"] and state["scroll_ok"]:
+            confirm_btn.config(state='normal')
+            status_var.set("✅ 条件已满足，点击「我已阅读，进入使用」继续")
+            status_label.config(foreground='green')
+
+    def _on_scroll(*args):
+        scrollbar.set(*args)
+        _, bottom = text_box.yview()
+        if bottom >= 0.98 and not state["scroll_ok"]:
+            state["scroll_ok"] = True
+            _check_enable()
+        if not (state["time_ok"] and state["scroll_ok"]):
+            _update_hint()
+
+    text_box.config(yscrollcommand=_on_scroll)
+
+    def _update_hint():
+        if state["time_ok"] and state["scroll_ok"]:
+            return
+        parts = []
+        if not state["time_ok"]:
+            parts.append(f"还需等待 {state['seconds_left']} 秒")
+        if not state["scroll_ok"]:
+            parts.append("⬇ 请继续向下滚动文本到底部")
+        status_var.set("⏳ " + "，".join(parts) + "…")
+        status_label.config(foreground='#c0392b')
+
+    def _countdown():
+        if state["seconds_left"] > 0:
+            state["seconds_left"] -= 1
+            _update_hint()
+            dialog.after(1000, _countdown)
+        else:
+            state["time_ok"] = True
+            _check_enable()
+            if not state["scroll_ok"]:
+                status_var.set("⬇ 计时完成！请继续滚动文本到最底部")
+                status_label.config(foreground='#e67e00')
+
+    def _confirm():
+        result["confirmed"] = True
+        os.makedirs(os.path.dirname(_README_FLAG), exist_ok=True)
+        try:
+            open(_README_FLAG, 'w').close()
+        except Exception:
+            pass
+        dialog.destroy()
+
+    confirm_btn.config(command=_confirm)
+
+    dialog.update_idletasks()
+    w, h = dialog.winfo_reqwidth(), dialog.winfo_reqheight()
+    sw, sh = dialog.winfo_screenwidth(), dialog.winfo_screenheight()
+    dialog.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+
+    dialog.after(1000, _countdown)
+    root.wait_window(dialog)
+    return result["confirmed"]
+
+
+# ─────────────────────────────────────────────────────────────
 # 用户系统登录（接入视频混剪系统认证体系）
 # ─────────────────────────────────────────────────────────────
 
@@ -4414,6 +4550,9 @@ def main():
     style.configure('Accent.TButton', font=('Microsoft YaHei', 10, 'bold'))
 
     root.withdraw()
+    if not show_readme_dialog(root):
+        root.destroy()
+        return
     if not show_login_dialog(root):
         root.destroy()
         return
