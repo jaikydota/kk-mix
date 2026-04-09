@@ -22,7 +22,7 @@ import requests
 import speech_tab
 import settings_window
 
-VERSION = "v9.4.1"
+VERSION = "v9.5.0"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -38,6 +38,7 @@ VERSION_INFO = f"""\
 平台：Windows
 
 更新日志（只记录大功能迭代）：
+• v9.5  增加批量压缩功能
 • v9.4  增加用户登录授权功能
 • v9.3  增加使用前必读
 • v9.2  增加视频压缩功能
@@ -713,6 +714,12 @@ class FFmpegVideoEditorApp:
         self.crop_ratio = tk.StringVar(value="9:16")
         self.crop_mode = tk.StringVar(value="video")  # "video" 或 "image"
 
+        # 批量压缩视频
+        self.compress_folder = tk.StringVar()
+        self.compress_output = tk.StringVar()
+        self.compress_br = tk.StringVar(value="2M")
+        self.compress_h265 = tk.BooleanVar(value=True)
+
         # 视频配音变量
         self.speech_video_folder = tk.StringVar()
         self.speech_text_folder = tk.StringVar()
@@ -829,6 +836,7 @@ class FFmpegVideoEditorApp:
             ("填充音乐",    "music"),
             ("视频添加标题", "title"),
             ("批量裁剪比例", "crop"),
+            ("批量压缩视频", "compress"),
             # ("视频配音(后续开放)",    "speech"),   # 暂时隐藏
             # ("视频翻译(后续开放)",    "translate"), # 暂时隐藏
         ]
@@ -846,6 +854,7 @@ class FFmpegVideoEditorApp:
             "music":     self.create_music_tab,
             "title":     self.create_title_tab,
             "crop":      self.create_crop_tab,
+            "compress":  self.create_compress_tab,
             # "speech":    lambda f: speech_tab.create_speech_tab(self, f),  # 暂时隐藏
             # "translate": self.create_translate_tab,                         # 暂时隐藏
         }
@@ -1779,6 +1788,40 @@ class FFmpegVideoEditorApp:
         ttk.Button(parent, text="批量裁剪", command=self.start_crop, style='Accent.TButton').grid(row=5, column=0, columnspan=3, pady=15)
         parent.columnconfigure(1, weight=1)
 
+    def create_compress_tab(self, parent):
+        """创建批量压缩视频标签页"""
+        ttk.Label(parent, text="视频文件夹:").grid(row=0, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.compress_folder).grid(row=0, column=1, padx=5, sticky='ew')
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.compress_folder)).grid(row=0, column=2, padx=5)
+
+        ttk.Label(parent, text="输出文件夹:").grid(row=1, column=0, sticky='w', padx=10, pady=5)
+        ttk.Entry(parent, textvariable=self.compress_output).grid(row=1, column=1, padx=5, sticky='ew')
+        ttk.Button(parent, text="浏览", command=lambda: self.browse_folder(self.compress_output, True)).grid(row=1, column=2, padx=5)
+
+        ttk.Label(parent, text="压缩码率:").grid(row=2, column=0, sticky='w', padx=10, pady=5)
+        br_frame = ttk.Frame(parent)
+        br_frame.grid(row=2, column=1, padx=5, sticky='w')
+        br_combo = ttk.Combobox(br_frame, textvariable=self.compress_br, width=14,
+                                values=["1M", "2M（推荐）", "3M", "5M", "8M", "10M"])
+        br_combo.pack(side='left')
+
+        def _on_br_selected(event):
+            val = self.compress_br.get()
+            if "（" in val:
+                self.compress_br.set(val.split("（")[0])
+
+        br_combo.bind("<<ComboboxSelected>>", _on_br_selected)
+        ttk.Label(br_frame, text="最大50M", foreground="gray", font=("", 9)).pack(side='left', padx=6)
+
+        ttk.Checkbutton(parent, text="使用 H.265 编码（体积更小，不勾选则使用 H.264）",
+                        variable=self.compress_h265).grid(row=3, column=0, columnspan=3, sticky='w', padx=12, pady=5)
+
+        ttk.Label(parent, text="💡 25fps 输出，码率越大清晰度越高，但不会超过原素材清晰度。",
+                  foreground='gray').grid(row=4, column=0, columnspan=3, sticky='w', padx=12, pady=(0, 4))
+
+        ttk.Button(parent, text="批量压缩", command=self.start_compress, style='Accent.TButton').grid(row=5, column=0, columnspan=3, pady=15)
+        parent.columnconfigure(1, weight=1)
+
     # 常见中文字体：注册表英文名 → 中文名（用于下拉框显示）
     _KNOWN_CHINESE_FONTS = {
         "Microsoft YaHei":            "微软雅黑",
@@ -1922,6 +1965,11 @@ class FFmpegVideoEditorApp:
 
     def start_crop(self):
         thread = threading.Thread(target=self.batch_crop_operation)
+        thread.daemon = True
+        thread.start()
+
+    def start_compress(self):
+        thread = threading.Thread(target=self.batch_compress_operation)
         thread.daemon = True
         thread.start()
 
@@ -2990,6 +3038,124 @@ class FFmpegVideoEditorApp:
             return True
         except Exception as e:
             self.log(f"  图片裁剪错误: {e}")
+            return False
+
+    def batch_compress_operation(self):
+        """批量压缩视频（H.265 编码 + 指定码率 + 25fps）"""
+        self.current_operation = "compress"
+        self.set_controls_state(True)
+        self.progress_var.set(0)
+
+        try:
+            source_folder = self.compress_folder.get().strip()
+            output_folder = self.compress_output.get().strip()
+            br = self.compress_br.get().strip().upper()
+
+            if not source_folder:
+                messagebox.showerror("错误", "请选择视频文件夹！")
+                return
+
+            if not br or not br.endswith("M"):
+                messagebox.showerror("错误", "请选择或输入有效的压缩码率（如 2M）！")
+                return
+
+            files = self.get_video_files(source_folder)
+            if not files:
+                messagebox.showerror("错误", "文件夹中没有找到视频文件！")
+                return
+
+            if not output_folder:
+                output_folder = os.path.join(source_folder, "compress_output")
+            os.makedirs(output_folder, exist_ok=True)
+
+            self.log(f"\n{'='*60}")
+            codec_label = "H.265" if self.compress_h265.get() else "H.264"
+            self.log(f"开始批量压缩视频（{codec_label} / {br} / 25fps）")
+            self.log(f"视频数: {len(files)} 个")
+            self.log(f"{'='*60}\n")
+
+            success_count = 0
+
+            for idx, file_name in enumerate(files, 1):
+                if self.check_pause_stop():
+                    break
+
+                file_path = os.path.join(source_folder, file_name)
+                output_name = f"compress_{idx:03d}_{Path(file_name).stem}.mp4"
+                output_path = os.path.join(output_folder, output_name)
+
+                self.log(f"\n[{idx}/{len(files)}] 处理: {file_name}")
+                ok = self._compress_ffmpeg(file_path, output_path, br)
+
+                if ok:
+                    success_count += 1
+                    self.log(f"✓ 成功: {output_name}")
+                else:
+                    self.log(f"✗ 失败: {file_name}")
+
+                self.progress_var.set((idx / len(files)) * 100)
+                self.update_status(f"压缩视频中... {idx}/{len(files)}")
+
+            self.log(f"\n{'='*60}")
+            self.log(f"完成！成功处理 {success_count}/{len(files)} 个视频")
+            self.log(f"输出目录: {output_folder}")
+            self.log(f"{'='*60}")
+
+            if success_count > 0:
+                done = threading.Event()
+                def _show_done_dialog():
+                    dlg = tk.Toplevel(self.root)
+                    dlg.withdraw()
+                    dlg.title("完成")
+                    dlg.resizable(False, False)
+                    dlg.transient(self.root)
+                    icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
+                    if os.path.exists(icon_path):
+                        dlg.iconbitmap(icon_path)
+                    tk.Label(dlg, text=f"成功压缩 {success_count} 个视频！\n输出目录: {output_folder}",
+                             padx=20, pady=15, justify="left").pack()
+                    btn_frame = tk.Frame(dlg, pady=8)
+                    btn_frame.pack()
+                    tk.Button(btn_frame, text="打开文件夹", width=12,
+                              command=lambda: [os.startfile(output_folder), dlg.destroy(), done.set()]).pack(side="left", padx=6)
+                    tk.Button(btn_frame, text="确定", width=8,
+                              command=lambda: [dlg.destroy(), done.set()]).pack(side="left", padx=6)
+                    dlg.protocol("WM_DELETE_WINDOW", lambda: [dlg.destroy(), done.set()])
+                    dlg.update_idletasks()
+                    w, h = dlg.winfo_reqwidth(), dlg.winfo_reqheight()
+                    rx = self.root.winfo_x() + (self.root.winfo_width() - w) // 2
+                    ry = self.root.winfo_y() + (self.root.winfo_height() - h) // 2
+                    dlg.geometry(f"+{rx}+{ry}")
+                    dlg.deiconify()
+                    dlg.grab_set()
+                self.root.after(0, _show_done_dialog)
+                done.wait()
+
+        except Exception as e:
+            messagebox.showerror("错误", f"压缩失败: {str(e)}")
+            self.log(f"✗ 错误: {str(e)}")
+        finally:
+            self.set_controls_state(False)
+
+    def _compress_ffmpeg(self, input_path, output_path, bitrate):
+        """使用指定编码 + 25fps + 指定码率压缩视频"""
+        try:
+            codec = 'libx265' if self.compress_h265.get() else 'libx264'
+            cmd = [
+                self.ffmpeg_path,
+                '-i', input_path,
+                '-c:v', codec,
+                '-preset', self._preset(),
+                '-b:v', bitrate,
+                '-r', '25',
+                '-c:a', 'aac', '-b:a', '128k',
+                '-y',
+                output_path
+            ]
+            result = self._run_cmd(cmd, timeout=1200)
+            return result.returncode == 0
+        except Exception as e:
+            self.log(f"  ffmpeg 错误: {e}")
             return False
 
     def _wrap_title_text(self, text, fontsize, video_width, margin_ratio=0.08):
