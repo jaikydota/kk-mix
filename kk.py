@@ -341,7 +341,7 @@ def show_readme_dialog(root) -> bool:
 # 用户系统登录（接入视频混剪系统认证体系）
 # ─────────────────────────────────────────────────────────────
 
-# API_TEST_BASE = "https://your-llm-host.example.com/api/v1"
+# API_BASE = "http://localhost:8080/api/v1"
 API_BASE = "https://your-llm-host.example.com/api/v1"
 _TOKEN_FILE = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "vek", ".vek_token")
 
