@@ -14,6 +14,7 @@ from tkinter import ttk, filedialog, messagebox
 import threading
 import numpy as np
 from PIL import Image, ImageTk
+import ctypes
 import shutil
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding as crypto_padding
@@ -22,7 +23,7 @@ import requests
 import speech_tab
 import settings_window
 
-VERSION = "v9.5.0"
+VERSION = "v9.5.1"
 APP_TITLE = f"中巨量KK智能剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -226,9 +227,7 @@ def show_readme_dialog(root) -> bool:
     dialog = tk.Toplevel(root)
     dialog.title("使用前必看 — 请仔细阅读后方可使用")
     dialog.resizable(False, False)
-    dialog.transient(root)
     dialog.grab_set()
-    # 禁止直接点 × 关闭（只能点退出按钮）
     dialog.protocol("WM_DELETE_WINDOW", lambda: None)
 
     icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
@@ -427,7 +426,6 @@ def show_login_dialog(root) -> bool:
     dialog = tk.Toplevel(root)
     dialog.title("登录 KK智能剪辑")
     dialog.resizable(False, False)
-    dialog.transient(root)
     dialog.grab_set()
 
     icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
@@ -4713,7 +4711,23 @@ class FFmpegVideoEditorApp:
         return asyncio.run(_translate_all())
 
 
+def _acquire_single_instance_mutex():
+    """通过 Windows 命名互斥锁确保只运行一个实例。返回句柄（需保持引用），已有实例时返回 None。"""
+    if sys.platform != "win32":
+        return True
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.CreateMutexW(None, False, "Global\\KK_MIX_VIDEO_EDITOR_SINGLETON")
+    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        kernel32.CloseHandle(handle)
+        return None
+    return handle
+
+
 def main():
+    _mutex = _acquire_single_instance_mutex()
+    if _mutex is None:
+        return
+
     root = tk.Tk()
     style = ttk.Style()
     style.configure('Accent.TButton', font=('Microsoft YaHei', 10, 'bold'))
