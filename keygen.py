@@ -67,7 +67,7 @@ class KeygenApp:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("中巨量kk剪辑工具-授权码生成器")
+        self.root.title("出海帮-巨量剪辑工具-授权码生成器")
         self.root.geometry("560x420")
         self.root.resizable(False, False)
 
