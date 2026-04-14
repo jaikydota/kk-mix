@@ -19,7 +19,7 @@ import shutil
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding as crypto_padding
 from cryptography.hazmat.backends import default_backend
-import requests
+# import requests  # 线上用户系统登录时启用
 import speech_tab
 import settings_window
 
@@ -54,152 +54,152 @@ VERSION_INFO = f"""\
 
 
 # ─────────────────────────────────────────────────────────────
-# 【已弃用】授权码管理器（已替换为用户系统登录，保留代码仅供参考）
+# 授权管理器
 # ─────────────────────────────────────────────────────────────
 
-# class LicenseManager:
-#     """授权管理器 - 授权码验证"""
-#
-#     def __init__(self, app_name="REDACTED-SEED"):
-#         self.app_name = app_name
-#         self.secret_key = self._generate_key()
-#         app_data = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "vek")
-#         os.makedirs(app_data, exist_ok=True)
-#         self.license_file = os.path.join(app_data, ".vek_li")
-#
-#     def _generate_key(self):
-#         key_base = hashlib.sha256(self.app_name.encode()).digest()
-#         return key_base[:32]
-#
-#     def _encrypt_data(self, data):
-#         try:
-#             iv = os.urandom(16)
-#             cipher = Cipher(algorithms.AES(self.secret_key), modes.CBC(iv), backend=default_backend())
-#             encryptor = cipher.encryptor()
-#             padder = crypto_padding.PKCS7(128).padder()
-#             padded_data = padder.update(data.encode()) + padder.finalize()
-#             encrypted = encryptor.update(padded_data) + encryptor.finalize()
-#             return base64.b64encode(iv + encrypted).decode()
-#         except Exception:
-#             return None
-#
-#     def _decrypt_data(self, encrypted_data):
-#         try:
-#             decoded = base64.b64decode(encrypted_data.encode())
-#             iv = decoded[:16]
-#             encrypted = decoded[16:]
-#             cipher = Cipher(algorithms.AES(self.secret_key), modes.CBC(iv), backend=default_backend())
-#             decryptor = cipher.decryptor()
-#             padded_data = decryptor.update(encrypted) + decryptor.finalize()
-#             unpadder = crypto_padding.PKCS7(128).unpadder()
-#             data = unpadder.update(padded_data) + unpadder.finalize()
-#             return data.decode()
-#         except Exception:
-#             return None
-#
-#     def verify_auth_code(self, auth_code):
-#         try:
-#             decrypted_data = self._decrypt_data(auth_code)
-#             if not decrypted_data:
-#                 return False, "授权码无效或损坏，请联系管理员"
-#             license_info = json.loads(decrypted_data)
-#             expire_date_str = license_info.get("expire_date")
-#             expire_date = datetime.strptime(expire_date_str, "%Y-%m-%d %H:%M:%S")
-#             now = datetime.now()
-#             create_date_str = license_info.get("create_date")
-#             if create_date_str:
-#                 create_date = datetime.strptime(create_date_str, "%Y-%m-%d %H:%M:%S")
-#                 if now < create_date:
-#                     return False, "系统时间异常，请检查系统时间设置"
-#             if now > expire_date:
-#                 return False, f"授权码已过期（过期时间：{expire_date_str}）"
-#             days_left = (expire_date - now).days
-#             return True, f"授权验证成功，剩余 {days_left} 天"
-#         except Exception as e:
-#             return False, f"授权码验证失败: {str(e)}"
-#
-#     def save_license(self, auth_code):
-#         try:
-#             encrypted = self._encrypt_data(auth_code)
-#             with open(self.license_file, 'w') as f:
-#                 f.write(encrypted)
-#             return True
-#         except Exception:
-#             return False
-#
-#     def load_license(self):
-#         if not os.path.exists(self.license_file):
-#             return None
-#         try:
-#             with open(self.license_file, 'r') as f:
-#                 encrypted = f.read()
-#             return self._decrypt_data(encrypted)
-#         except Exception:
-#             return None
-#
-#
-# def show_license_dialog(root):
-#     """显示授权验证对话框，返回 True 表示授权通过"""
-#     lm = LicenseManager()
-#
-#     saved_code = lm.load_license()
-#     if saved_code:
-#         ok, msg = lm.verify_auth_code(saved_code)
-#         if ok:
-#             return True
-#
-#     result = {"authorized": False}
-#
-#     dialog = tk.Toplevel(root)
-#     dialog.title("软件授权验证")
-#     dialog.geometry("480x260")
-#     dialog.resizable(False, False)
-#     dialog.transient(root)
-#     dialog.grab_set()
-#
-#     icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
-#     if os.path.exists(icon_path):
-#         dialog.iconbitmap(icon_path)
-#
-#     dialog.protocol("WM_DELETE_WINDOW", lambda: (result.update(authorized=False), dialog.destroy()))
-#
-#     frame = ttk.Frame(dialog, padding=20)
-#     frame.pack(fill='both', expand=True)
-#
-#     ttk.Label(frame, text="请输入授权码", font=('Microsoft YaHei', 14, 'bold')).pack(pady=(0, 5))
-#     ttk.Label(frame, text="首次使用需要输入授权码，请联系管理员获取", foreground='gray').pack(pady=(0, 15))
-#
-#     code_var = tk.StringVar()
-#     code_entry = ttk.Entry(frame, textvariable=code_var, width=50, font=('Consolas', 10))
-#     code_entry.pack(pady=(0, 5))
-#
-#     status_label = ttk.Label(frame, text="", foreground='red')
-#     status_label.pack(pady=(0, 10))
-#
-#     def do_verify():
-#         code = code_var.get().strip()
-#         if not code:
-#             status_label.config(text="请输入授权码", foreground='red')
-#             return
-#         ok, msg = lm.verify_auth_code(code)
-#         if ok:
-#             lm.save_license(code)
-#             result["authorized"] = True
-#             status_label.config(text=msg, foreground='green')
-#             dialog.after(600, dialog.destroy)
-#         else:
-#             status_label.config(text=msg, foreground='red')
-#
-#     btn_frame = ttk.Frame(frame)
-#     btn_frame.pack(pady=(5, 0))
-#     ttk.Button(btn_frame, text="验证授权", command=do_verify, style='Accent.TButton').pack(side='left', padx=5)
-#     ttk.Button(btn_frame, text="退出", command=lambda: (result.update(authorized=False), dialog.destroy())).pack(side='left', padx=5)
-#
-#     code_entry.focus_set()
-#     code_entry.bind('<Return>', lambda e: do_verify())
-#
-#     root.wait_window(dialog)
-#     return result["authorized"]
+class LicenseManager:
+    """授权管理器 - 授权码验证"""
+
+    def __init__(self, app_name="REDACTED-SEED"):
+        self.app_name = app_name
+        self.secret_key = self._generate_key()
+        app_data = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "vek")
+        os.makedirs(app_data, exist_ok=True)
+        self.license_file = os.path.join(app_data, ".vek_li")
+
+    def _generate_key(self):
+        key_base = hashlib.sha256(self.app_name.encode()).digest()
+        return key_base[:32]
+
+    def _encrypt_data(self, data):
+        try:
+            iv = os.urandom(16)
+            cipher = Cipher(algorithms.AES(self.secret_key), modes.CBC(iv), backend=default_backend())
+            encryptor = cipher.encryptor()
+            padder = crypto_padding.PKCS7(128).padder()
+            padded_data = padder.update(data.encode()) + padder.finalize()
+            encrypted = encryptor.update(padded_data) + encryptor.finalize()
+            return base64.b64encode(iv + encrypted).decode()
+        except Exception:
+            return None
+
+    def _decrypt_data(self, encrypted_data):
+        try:
+            decoded = base64.b64decode(encrypted_data.encode())
+            iv = decoded[:16]
+            encrypted = decoded[16:]
+            cipher = Cipher(algorithms.AES(self.secret_key), modes.CBC(iv), backend=default_backend())
+            decryptor = cipher.decryptor()
+            padded_data = decryptor.update(encrypted) + decryptor.finalize()
+            unpadder = crypto_padding.PKCS7(128).unpadder()
+            data = unpadder.update(padded_data) + unpadder.finalize()
+            return data.decode()
+        except Exception:
+            return None
+
+    def verify_auth_code(self, auth_code):
+        try:
+            decrypted_data = self._decrypt_data(auth_code)
+            if not decrypted_data:
+                return False, "授权码无效或损坏，请联系管理员"
+            license_info = json.loads(decrypted_data)
+            expire_date_str = license_info.get("expire_date")
+            expire_date = datetime.strptime(expire_date_str, "%Y-%m-%d %H:%M:%S")
+            now = datetime.now()
+            create_date_str = license_info.get("create_date")
+            if create_date_str:
+                create_date = datetime.strptime(create_date_str, "%Y-%m-%d %H:%M:%S")
+                if now < create_date:
+                    return False, "系统时间异常，请检查系统时间设置"
+            if now > expire_date:
+                return False, f"授权码已过期（过期时间：{expire_date_str}）"
+            days_left = (expire_date - now).days
+            return True, f"授权验证成功，剩余 {days_left} 天"
+        except Exception as e:
+            return False, f"授权码验证失败: {str(e)}"
+
+    def save_license(self, auth_code):
+        try:
+            encrypted = self._encrypt_data(auth_code)
+            with open(self.license_file, 'w') as f:
+                f.write(encrypted)
+            return True
+        except Exception:
+            return False
+
+    def load_license(self):
+        if not os.path.exists(self.license_file):
+            return None
+        try:
+            with open(self.license_file, 'r') as f:
+                encrypted = f.read()
+            return self._decrypt_data(encrypted)
+        except Exception:
+            return None
+
+
+def show_license_dialog(root):
+    """显示授权验证对话框，返回 True 表示授权通过"""
+    lm = LicenseManager()
+
+    saved_code = lm.load_license()
+    if saved_code:
+        ok, msg = lm.verify_auth_code(saved_code)
+        if ok:
+            return True
+
+    result = {"authorized": False}
+
+    dialog = tk.Toplevel(root)
+    dialog.title("软件授权验证")
+    dialog.geometry("480x260")
+    dialog.resizable(False, False)
+    dialog.transient(root)
+    dialog.grab_set()
+
+    icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
+    if os.path.exists(icon_path):
+        dialog.iconbitmap(icon_path)
+
+    dialog.protocol("WM_DELETE_WINDOW", lambda: (result.update(authorized=False), dialog.destroy()))
+
+    frame = ttk.Frame(dialog, padding=20)
+    frame.pack(fill='both', expand=True)
+
+    ttk.Label(frame, text="请输入授权码", font=('Microsoft YaHei', 14, 'bold')).pack(pady=(0, 5))
+    ttk.Label(frame, text="首次使用需要输入授权码，请联系管理员获取", foreground='gray').pack(pady=(0, 15))
+
+    code_var = tk.StringVar()
+    code_entry = ttk.Entry(frame, textvariable=code_var, width=50, font=('Consolas', 10))
+    code_entry.pack(pady=(0, 5))
+
+    status_label = ttk.Label(frame, text="", foreground='red')
+    status_label.pack(pady=(0, 10))
+
+    def do_verify():
+        code = code_var.get().strip()
+        if not code:
+            status_label.config(text="请输入授权码", foreground='red')
+            return
+        ok, msg = lm.verify_auth_code(code)
+        if ok:
+            lm.save_license(code)
+            result["authorized"] = True
+            status_label.config(text=msg, foreground='green')
+            dialog.after(600, dialog.destroy)
+        else:
+            status_label.config(text=msg, foreground='red')
+
+    btn_frame = ttk.Frame(frame)
+    btn_frame.pack(pady=(5, 0))
+    ttk.Button(btn_frame, text="验证授权", command=do_verify, style='Accent.TButton').pack(side='left', padx=5)
+    ttk.Button(btn_frame, text="退出", command=lambda: (result.update(authorized=False), dialog.destroy())).pack(side='left', padx=5)
+
+    code_entry.focus_set()
+    code_entry.bind('<Return>', lambda e: do_verify())
+
+    root.wait_window(dialog)
+    return result["authorized"]
 
 
 # ─────────────────────────────────────────────────────────────
@@ -337,159 +337,155 @@ def show_readme_dialog(root) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────
-# 用户系统登录（接入视频混剪系统认证体系）
+# 【已暂停】用户系统登录（接入视频混剪系统认证体系，当前使用授权码机制）
 # ─────────────────────────────────────────────────────────────
 
-# API_BASE = "http://localhost:8080/api/v1"
-API_BASE = "https://your-llm-host.example.com/api/v1"
-_TOKEN_FILE = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "vek", ".vek_token")
-
-
-def _save_token(token: str):
-    os.makedirs(os.path.dirname(_TOKEN_FILE), exist_ok=True)
-    try:
-        with open(_TOKEN_FILE, 'w', encoding='utf-8') as f:
-            f.write(token)
-    except Exception:
-        pass
-
-
-def _load_token() -> str | None:
-    if not os.path.exists(_TOKEN_FILE):
-        return None
-    try:
-        with open(_TOKEN_FILE, 'r', encoding='utf-8') as f:
-            return f.read().strip() or None
-    except Exception:
-        return None
-
-
-def _clear_token():
-    try:
-        if os.path.exists(_TOKEN_FILE):
-            os.remove(_TOKEN_FILE)
-    except Exception:
-        pass
-
-
-def _verify_token(token: str) -> dict | None:
-    """调用 GET /auth/me 验证 Token，成功返回用户信息，失败返回 None。"""
-    try:
-        resp = requests.get(
-            f"{API_BASE}/auth/me",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            if data.get("code") == 0:
-                return data["data"]
-        _clear_token()
-        return None
-    except Exception:
-        return None
-
-
-def _do_login(email: str, password: str) -> tuple[bool, str, dict | None]:
-    """调用 POST /auth/login，返回 (success, message, user_info)。"""
-    try:
-        resp = requests.post(
-            f"{API_BASE}/auth/login",
-            json={"email": email, "password": password, "client": "kk_clip"},
-            timeout=10,
-        )
-        body = resp.json()
-        if resp.status_code == 200 and body.get("code") == 0:
-            token = body["data"]["access_token"]
-            user = body["data"]["user"]
-            _save_token(token)
-            return True, f"登录成功，欢迎 {user.get('nickname', email)}", user
-        error_msg = body.get("detail", "登录失败，请稍后重试")
-        return False, error_msg, None
-    except requests.exceptions.ConnectionError:
-        return False, "无法连接服务器，请检查网络", None
-    except Exception as e:
-        return False, f"登录异常: {e}", None
-
-
-def show_login_dialog(root) -> bool:
-    """显示用户登录对话框，返回 True 表示登录成功。"""
-    # 启动时先用缓存 Token 验证
-    cached_token = _load_token()
-    if cached_token:
-        user = _verify_token(cached_token)
-        if user:
-            return True
-
-    result = {"authorized": False}
-
-    dialog = tk.Toplevel(root)
-    dialog.title("登录 出海帮 - 巨量剪辑工具")
-    dialog.resizable(False, False)
-    dialog.grab_set()
-
-    icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
-    if os.path.exists(icon_path):
-        dialog.iconbitmap(icon_path)
-
-    dialog.protocol("WM_DELETE_WINDOW", lambda: (result.update(authorized=False), dialog.destroy()))
-
-    frame = ttk.Frame(dialog, padding=30)
-    frame.pack(fill='both', expand=True)
-
-    ttk.Label(frame, text="用户登录", font=('Microsoft YaHei', 15, 'bold')).pack(pady=(0, 4))
-    ttk.Label(frame, text="请使用管理员分配的账号登录", foreground='gray').pack(pady=(0, 18))
-
-    email_var = tk.StringVar()
-    pwd_var = tk.StringVar()
-
-    form = ttk.Frame(frame)
-    form.pack(fill='x')
-    ttk.Label(form, text="邮  箱", width=6, anchor='e').grid(row=0, column=0, padx=(0, 8), pady=4, sticky='e')
-    email_entry = ttk.Entry(form, textvariable=email_var, width=30)
-    email_entry.grid(row=0, column=1, pady=4, sticky='ew')
-    ttk.Label(form, text="密  码", width=6, anchor='e').grid(row=1, column=0, padx=(0, 8), pady=4, sticky='e')
-    pwd_entry = ttk.Entry(form, textvariable=pwd_var, show='*', width=30)
-    pwd_entry.grid(row=1, column=1, pady=4, sticky='ew')
-    form.columnconfigure(1, weight=1)
-
-    # wraplength 跟随 frame 宽度，确保长错误信息自动换行完整展示
-    status_label = ttk.Label(frame, text="", foreground='red', wraplength=360, justify='center')
-    status_label.pack(pady=(10, 0))
-
-    def do_login():
-        email = email_var.get().strip()
-        pwd = pwd_var.get()
-        if not email or not pwd:
-            status_label.config(text="请输入邮箱和密码", foreground='red')
-            return
-        status_label.config(text="登录中…", foreground='gray')
-        dialog.update_idletasks()
-        ok, msg, _ = _do_login(email, pwd)
-        if ok:
-            result["authorized"] = True
-            status_label.config(text=msg, foreground='green')
-            dialog.after(600, dialog.destroy)
-        else:
-            status_label.config(text=msg, foreground='red')
-
-    btn_frame = ttk.Frame(frame)
-    btn_frame.pack(pady=(8, 0))
-    ttk.Button(btn_frame, text="登  录", command=do_login, style='Accent.TButton').pack(side='left', padx=5)
-    ttk.Button(btn_frame, text="退  出", command=lambda: (result.update(authorized=False), dialog.destroy())).pack(side='left', padx=5)
-
-    email_entry.focus_set()
-    email_entry.bind('<Return>', lambda e: pwd_entry.focus_set())
-    pwd_entry.bind('<Return>', lambda e: do_login())
-
-    # 内容渲染完成后居中显示
-    dialog.update_idletasks()
-    w, h = dialog.winfo_reqwidth(), dialog.winfo_reqheight()
-    sw, sh = dialog.winfo_screenwidth(), dialog.winfo_screenheight()
-    dialog.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
-
-    root.wait_window(dialog)
-    return result["authorized"]
+# API_BASE = "https://your-llm-host.example.com/api/v1"
+# _TOKEN_FILE = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "vek", ".vek_token")
+#
+#
+# def _save_token(token: str):
+#     os.makedirs(os.path.dirname(_TOKEN_FILE), exist_ok=True)
+#     try:
+#         with open(_TOKEN_FILE, 'w', encoding='utf-8') as f:
+#             f.write(token)
+#     except Exception:
+#         pass
+#
+#
+# def _load_token() -> str | None:
+#     if not os.path.exists(_TOKEN_FILE):
+#         return None
+#     try:
+#         with open(_TOKEN_FILE, 'r', encoding='utf-8') as f:
+#             return f.read().strip() or None
+#     except Exception:
+#         return None
+#
+#
+# def _clear_token():
+#     try:
+#         if os.path.exists(_TOKEN_FILE):
+#             os.remove(_TOKEN_FILE)
+#     except Exception:
+#         pass
+#
+#
+# def _verify_token(token: str) -> dict | None:
+#     """调用 GET /auth/me 验证 Token，成功返回用户信息，失败返回 None。"""
+#     try:
+#         resp = requests.get(
+#             f"{API_BASE}/auth/me",
+#             headers={"Authorization": f"Bearer {token}"},
+#             timeout=10,
+#         )
+#         if resp.status_code == 200:
+#             data = resp.json()
+#             if data.get("code") == 0:
+#                 return data["data"]
+#         _clear_token()
+#         return None
+#     except Exception:
+#         return None
+#
+#
+# def _do_login(email: str, password: str) -> tuple[bool, str, dict | None]:
+#     """调用 POST /auth/login，返回 (success, message, user_info)。"""
+#     try:
+#         resp = requests.post(
+#             f"{API_BASE}/auth/login",
+#             json={"email": email, "password": password, "client": "kk_clip"},
+#             timeout=10,
+#         )
+#         body = resp.json()
+#         if resp.status_code == 200 and body.get("code") == 0:
+#             token = body["data"]["access_token"]
+#             user = body["data"]["user"]
+#             _save_token(token)
+#             return True, f"登录成功，欢迎 {user.get('nickname', email)}", user
+#         error_msg = body.get("detail", "登录失败，请稍后重试")
+#         return False, error_msg, None
+#     except requests.exceptions.ConnectionError:
+#         return False, "无法连接服务器，请检查网络", None
+#     except Exception as e:
+#         return False, f"登录异常: {e}", None
+#
+#
+# def show_login_dialog(root) -> bool:
+#     """显示用户登录对话框，返回 True 表示登录成功。"""
+#     cached_token = _load_token()
+#     if cached_token:
+#         user = _verify_token(cached_token)
+#         if user:
+#             return True
+#
+#     result = {"authorized": False}
+#
+#     dialog = tk.Toplevel(root)
+#     dialog.title("登录 出海帮 - 巨量剪辑工具")
+#     dialog.resizable(False, False)
+#     dialog.grab_set()
+#
+#     icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
+#     if os.path.exists(icon_path):
+#         dialog.iconbitmap(icon_path)
+#
+#     dialog.protocol("WM_DELETE_WINDOW", lambda: (result.update(authorized=False), dialog.destroy()))
+#
+#     frame = ttk.Frame(dialog, padding=30)
+#     frame.pack(fill='both', expand=True)
+#
+#     ttk.Label(frame, text="用户登录", font=('Microsoft YaHei', 15, 'bold')).pack(pady=(0, 4))
+#     ttk.Label(frame, text="请使用管理员分配的账号登录", foreground='gray').pack(pady=(0, 18))
+#
+#     email_var = tk.StringVar()
+#     pwd_var = tk.StringVar()
+#
+#     form = ttk.Frame(frame)
+#     form.pack(fill='x')
+#     ttk.Label(form, text="邮  箱", width=6, anchor='e').grid(row=0, column=0, padx=(0, 8), pady=4, sticky='e')
+#     email_entry = ttk.Entry(form, textvariable=email_var, width=30)
+#     email_entry.grid(row=0, column=1, pady=4, sticky='ew')
+#     ttk.Label(form, text="密  码", width=6, anchor='e').grid(row=1, column=0, padx=(0, 8), pady=4, sticky='e')
+#     pwd_entry = ttk.Entry(form, textvariable=pwd_var, show='*', width=30)
+#     pwd_entry.grid(row=1, column=1, pady=4, sticky='ew')
+#     form.columnconfigure(1, weight=1)
+#
+#     status_label = ttk.Label(frame, text="", foreground='red', wraplength=360, justify='center')
+#     status_label.pack(pady=(10, 0))
+#
+#     def do_login():
+#         email = email_var.get().strip()
+#         pwd = pwd_var.get()
+#         if not email or not pwd:
+#             status_label.config(text="请输入邮箱和密码", foreground='red')
+#             return
+#         status_label.config(text="登录中…", foreground='gray')
+#         dialog.update_idletasks()
+#         ok, msg, _ = _do_login(email, pwd)
+#         if ok:
+#             result["authorized"] = True
+#             status_label.config(text=msg, foreground='green')
+#             dialog.after(600, dialog.destroy)
+#         else:
+#             status_label.config(text=msg, foreground='red')
+#
+#     btn_frame = ttk.Frame(frame)
+#     btn_frame.pack(pady=(8, 0))
+#     ttk.Button(btn_frame, text="登  录", command=do_login, style='Accent.TButton').pack(side='left', padx=5)
+#     ttk.Button(btn_frame, text="退  出", command=lambda: (result.update(authorized=False), dialog.destroy())).pack(side='left', padx=5)
+#
+#     email_entry.focus_set()
+#     email_entry.bind('<Return>', lambda e: pwd_entry.focus_set())
+#     pwd_entry.bind('<Return>', lambda e: do_login())
+#
+#     dialog.update_idletasks()
+#     w, h = dialog.winfo_reqwidth(), dialog.winfo_reqheight()
+#     sw, sh = dialog.winfo_screenwidth(), dialog.winfo_screenheight()
+#     dialog.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+#
+#     root.wait_window(dialog)
+#     return result["authorized"]
 
 
 # ─────────────────────────────────────────────────────────────
@@ -4736,7 +4732,7 @@ def main():
     if not show_readme_dialog(root):
         root.destroy()
         return
-    if not show_login_dialog(root):
+    if not show_license_dialog(root):
         root.destroy()
         return
 
