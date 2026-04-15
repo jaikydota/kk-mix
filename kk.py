@@ -54,6 +54,34 @@ VERSION_INFO = f"""\
 
 
 # ─────────────────────────────────────────────────────────────
+# 机器码采集
+# ─────────────────────────────────────────────────────────────
+
+def _get_machine_id() -> str:
+    """采集本机唯一标识（主板UUID + CPU ID → MD5 哈希），格式 XXXX-XXXX-XXXX-XXXX。
+    换硬盘/内存/网卡不影响，只有换主板或CPU才会变化。"""
+    raw = ""
+    try:
+        r = subprocess.run(
+            ["wmic", "csproduct", "get", "UUID"],
+            capture_output=True, text=True, timeout=5,
+        )
+        raw += r.stdout.strip()
+    except Exception:
+        pass
+    try:
+        r = subprocess.run(
+            ["wmic", "cpu", "get", "ProcessorId"],
+            capture_output=True, text=True, timeout=5,
+        )
+        raw += r.stdout.strip()
+    except Exception:
+        pass
+    h = hashlib.md5(raw.encode()).hexdigest()[:16].upper()
+    return f"{h[:4]}-{h[4:8]}-{h[8:12]}-{h[12:16]}"
+
+
+# ─────────────────────────────────────────────────────────────
 # 授权管理器
 # ─────────────────────────────────────────────────────────────
 
@@ -103,6 +131,9 @@ class LicenseManager:
             if not decrypted_data:
                 return False, "授权码无效或损坏，请联系管理员"
             license_info = json.loads(decrypted_data)
+            bound_machine = license_info.get("machine_id")
+            if bound_machine != _get_machine_id():
+                return False, "授权码与本机不匹配，请联系管理员重新生成"
             expire_date_str = license_info.get("expire_date")
             expire_date = datetime.strptime(expire_date_str, "%Y-%m-%d %H:%M:%S")
             now = datetime.now()
@@ -149,12 +180,11 @@ def show_license_dialog(root):
             return True
 
     result = {"authorized": False}
+    machine_id = _get_machine_id()
 
     dialog = tk.Toplevel(root)
     dialog.title("软件授权验证")
-    dialog.geometry("480x260")
     dialog.resizable(False, False)
-    dialog.transient(root)
     dialog.grab_set()
 
     icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
@@ -167,13 +197,31 @@ def show_license_dialog(root):
     frame.pack(fill='both', expand=True)
 
     ttk.Label(frame, text="请输入授权码", font=('Microsoft YaHei', 14, 'bold')).pack(pady=(0, 5))
-    ttk.Label(frame, text="首次使用需要输入授权码，请联系管理员获取", foreground='gray').pack(pady=(0, 15))
+    ttk.Label(frame, text="首次使用需要输入授权码，请将下方机器码发送给管理员获取", foreground='gray').pack(pady=(0, 12))
+
+    # 机器码展示行
+    mid_frame = ttk.Frame(frame)
+    mid_frame.pack(fill='x', pady=(0, 12))
+    ttk.Label(mid_frame, text="本机机器码：", font=('Microsoft YaHei', 10)).pack(side='left')
+    mid_var = tk.StringVar(value=machine_id)
+    mid_entry = ttk.Entry(mid_frame, textvariable=mid_var, width=22, font=('Consolas', 11),
+                          state='readonly', justify='center')
+    mid_entry.pack(side='left', padx=(2, 6))
+
+    def _copy_mid():
+        dialog.clipboard_clear()
+        dialog.clipboard_append(machine_id)
+        copy_btn.config(text="已复制")
+        dialog.after(1500, lambda: copy_btn.config(text="复制"))
+
+    copy_btn = ttk.Button(mid_frame, text="复制", command=_copy_mid, width=6)
+    copy_btn.pack(side='left')
 
     code_var = tk.StringVar()
     code_entry = ttk.Entry(frame, textvariable=code_var, width=50, font=('Consolas', 10))
     code_entry.pack(pady=(0, 5))
 
-    status_label = ttk.Label(frame, text="", foreground='red')
+    status_label = ttk.Label(frame, text="", foreground='red', wraplength=440, justify='center')
     status_label.pack(pady=(0, 10))
 
     def do_verify():
@@ -197,6 +245,12 @@ def show_license_dialog(root):
 
     code_entry.focus_set()
     code_entry.bind('<Return>', lambda e: do_verify())
+
+    # 内容渲染完成后居中显示
+    dialog.update_idletasks()
+    w, h = dialog.winfo_reqwidth(), dialog.winfo_reqheight()
+    sw, sh = dialog.winfo_screenwidth(), dialog.winfo_screenheight()
+    dialog.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
 
     root.wait_window(dialog)
     return result["authorized"]

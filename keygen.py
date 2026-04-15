@@ -49,14 +49,16 @@ class LicenseGenerator:
         except Exception:
             return None
 
-    def generate_auth_code(self, days=30):
+    def generate_auth_code(self, days=30, machine_id=""):
         try:
             license_info = {
                 "expire_date": (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S"),
                 "create_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "days": days,
-                "version": "7.0"
+                "version": "7.0",
             }
+            if machine_id:
+                license_info["machine_id"] = machine_id
             return self._encrypt_data(json.dumps(license_info))
         except Exception:
             return None
@@ -68,7 +70,7 @@ class KeygenApp:
     def __init__(self, root):
         self.root = root
         self.root.title("出海帮-巨量剪辑工具-授权码生成器")
-        self.root.geometry("560x420")
+        self.root.geometry("620x460")
         self.root.resizable(False, False)
 
         icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
@@ -121,6 +123,19 @@ class KeygenApp:
         ttk.Label(frame, text="授权码生成器",
                   font=('Microsoft YaHei', 14, 'bold')).pack(pady=(0, 15))
 
+        # 机器码输入
+        mid_frame = ttk.Frame(frame)
+        mid_frame.pack(fill='x', pady=(0, 8))
+        ttk.Label(mid_frame, text="机器码：",
+                  font=('Microsoft YaHei', 10)).pack(side='left')
+        self.mid_var = tk.StringVar()
+        mid_entry = ttk.Entry(mid_frame, textvariable=self.mid_var,
+                              width=24, font=('Consolas', 11))
+        mid_entry.pack(side='left', padx=(5, 8))
+        ttk.Label(mid_frame, text="(粘贴用户提供的机器码，留空则不绑机器)",
+                  foreground='gray', font=('Microsoft YaHei', 8)).pack(side='left')
+
+        # 授权天数
         days_frame = ttk.Frame(frame)
         days_frame.pack(fill='x', pady=(0, 10))
         ttk.Label(days_frame, text="授权天数：",
@@ -150,7 +165,7 @@ class KeygenApp:
         self.info_label = ttk.Label(frame, text="", foreground='green')
         self.info_label.pack(pady=(10, 0))
 
-        days_entry.focus_set()
+        mid_entry.focus_set()
         days_entry.bind('<Return>', lambda e: self._generate())
 
     def _generate(self):
@@ -162,13 +177,15 @@ class KeygenApp:
             messagebox.showerror("错误", "请输入有效的天数（正整数）")
             return
 
-        auth_code = self.generator.generate_auth_code(days)
+        machine_id = self.mid_var.get().strip()
+        auth_code = self.generator.generate_auth_code(days, machine_id=machine_id)
         if auth_code:
             self.result_text.delete('1.0', 'end')
             self.result_text.insert('1.0', auth_code)
             expire = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+            bind_info = f"，绑定机器码：{machine_id}" if machine_id else "，未绑定机器（通用码）"
             self.info_label.config(
-                text=f"生成成功！有效期 {days} 天，到期时间：{expire}",
+                text=f"生成成功！有效期 {days} 天，到期时间：{expire}{bind_info}",
                 foreground='green')
         else:
             self.info_label.config(text="生成失败，请重试", foreground='red')

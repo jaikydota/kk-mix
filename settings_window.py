@@ -4,6 +4,7 @@ import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk, messagebox
+from datetime import datetime
 from PIL import Image, ImageTk
 
 
@@ -67,14 +68,14 @@ def open_settings(app):
     """打开全局设置窗口"""
     win = tk.Toplevel(app.root)
     win.title("全局设置")
-    win.geometry("480x680")
+    win.geometry("480x780")
     win.resizable(False, False)
     win.grab_set()  # 模态
 
     # 使窗口居中于主窗口
     app.root.update_idletasks()
     rx = app.root.winfo_x() + (app.root.winfo_width() - 480) // 2
-    ry = app.root.winfo_y() + (app.root.winfo_height() - 680) // 2
+    ry = app.root.winfo_y() + (app.root.winfo_height() - 780) // 2
     win.geometry(f"+{rx}+{ry}")
 
     icon_path = _resource_path(os.path.join('assets', 'logo.ico'))
@@ -227,6 +228,55 @@ def open_settings(app):
 
     compress_cb.configure(command=_toggle_bitrate_ui)
     _toggle_bitrate_ui()
+
+    # ── 授权信息 ──────────────────────────────────
+    license_section = ttk.LabelFrame(win, text="授权信息", padding=10)
+    license_section.pack(fill="x", padx=15, pady=(0, 8))
+
+    try:
+        from kk import LicenseManager, _get_machine_id
+        lm = LicenseManager()
+        mid = _get_machine_id()
+
+        mid_row = ttk.Frame(license_section)
+        mid_row.grid(row=0, column=0, columnspan=2, sticky="w", padx=12, pady=2)
+        ttk.Label(mid_row, text=f"本机机器码：{mid}", font=('Consolas', 9)).pack(side='left')
+
+        def _copy_mid():
+            win.clipboard_clear()
+            win.clipboard_append(mid)
+            copy_btn.config(text="已复制")
+            win.after(1500, lambda: copy_btn.config(text="复制"))
+
+        copy_btn = ttk.Button(mid_row, text="复制", command=_copy_mid, width=5)
+        copy_btn.pack(side='left', padx=(8, 0))
+
+        saved = lm.load_license()
+        if saved:
+            ok, msg = lm.verify_auth_code(saved)
+            if ok:
+                info = json.loads(lm._decrypt_data(saved))
+                expire_str = info.get("expire_date", "未知")
+                expire_dt = datetime.strptime(expire_str, "%Y-%m-%d %H:%M:%S")
+                days_left = (expire_dt - datetime.now()).days
+                ttk.Label(license_section, text=f"到期时间：{expire_str}",
+                          font=('Microsoft YaHei', 9)).grid(row=1, column=0, sticky="w", padx=12, pady=2)
+                color = 'green' if days_left > 7 else ('#e67e00' if days_left > 0 else 'red')
+                ttk.Label(license_section, text=f"剩余天数：{days_left} 天",
+                          font=('Microsoft YaHei', 9, 'bold'), foreground=color
+                          ).grid(row=2, column=0, sticky="w", padx=12, pady=2)
+            else:
+                ttk.Label(license_section, text=f"授权状态：{msg}",
+                          foreground='red', font=('Microsoft YaHei', 9)
+                          ).grid(row=1, column=0, sticky="w", padx=12, pady=2)
+        else:
+            ttk.Label(license_section, text="授权状态：未激活",
+                      foreground='gray', font=('Microsoft YaHei', 9)
+                      ).grid(row=1, column=0, sticky="w", padx=12, pady=2)
+    except Exception:
+        ttk.Label(license_section, text="无法读取授权信息",
+                  foreground='gray', font=('Microsoft YaHei', 9)
+                  ).grid(row=0, column=0, sticky="w", padx=12, pady=2)
 
     # ── 按钮区 ────────────────────────────────────
     btn_frame = ttk.Frame(win)
