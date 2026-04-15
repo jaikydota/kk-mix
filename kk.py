@@ -21,7 +21,7 @@ import _license_core
 import speech_tab
 import settings_window
 
-VERSION = "v9.5.2"
+VERSION = "v9.6.0"
 APP_TITLE = f"出海帮 - 巨量剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
@@ -37,7 +37,7 @@ VERSION_INFO = f"""\
 平台：Windows
 
 更新日志（只记录大功能迭代）：
-• v9.5  增加一机一码机制
+• v9.6  增加一机一码机制
 • v9.5  增加批量压缩功能
 • v9.4  增加用户登录授权功能
 • v9.3  增加使用前必读
