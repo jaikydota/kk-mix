@@ -7,11 +7,12 @@ alwaysApply: true
 
 ## 项目概览
 
-- 语言：Python，单文件 `kk.py`
+- 语言：Python，主文件 `kk.py`，模块 `speech_tab.py` / `settings_window.py`
+- 授权核心：`_license_core.pyx` → Cython 编译为 `.pyd`（防反编译）
 - UI：Tkinter 多标签页
 - 核心：调用 `ffmpeg.exe` 完成视频处理
-- 打包：PyInstaller → `dist/kk.exe`（内嵌 ffmpeg.exe）
-- 版本：v7.0，Windows 平台
+- 打包：Cython 编译 `.pyd` → PyInstaller → `dist/kk/`（内嵌 ffmpeg.exe + .pyd）
+- 版本：v9.5，Windows 平台
 
 ## 架构模式
 
@@ -38,6 +39,8 @@ FFmpegVideoEditorApp
 - 所有批处理跑在 `threading.Thread` 里，禁止阻塞主线程
 - ffmpeg 命令用 `subprocess.run(cmd, capture_output=True)`
 - 输出文件默认放在源文件同目录，加后缀区分（如 `_out`、`_speed`）
+- 授权相关逻辑全部在 `_license_core.pyx`，禁止在 .py 文件中出现密钥/密码明文
+- 构建时先 `python setup_cython.py build_ext --inplace`，再 PyInstaller 打包
 
 ## 现有功能 Tab
 

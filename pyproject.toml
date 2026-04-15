@@ -14,7 +14,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "cython>=3.0.0",
     "pyinstaller==6.19.0",
+    "setuptools>=75.0.0",
 ]
 
 [tool.uv]

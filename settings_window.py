@@ -234,9 +234,8 @@ def open_settings(app):
     license_section.pack(fill="x", padx=15, pady=(0, 8))
 
     try:
-        from kk import LicenseManager, _get_machine_id
-        lm = LicenseManager()
-        mid = _get_machine_id()
+        import _license_core
+        mid = _license_core.get_machine_id()
 
         mid_row = ttk.Frame(license_section)
         mid_row.grid(row=0, column=0, columnspan=2, sticky="w", padx=12, pady=2)
@@ -251,11 +250,11 @@ def open_settings(app):
         copy_btn = ttk.Button(mid_row, text="复制", command=_copy_mid, width=5)
         copy_btn.pack(side='left', padx=(8, 0))
 
-        saved = lm.load_license()
+        saved = _license_core.load_license()
         if saved:
-            ok, msg = lm.verify_auth_code(saved)
+            ok, msg = _license_core.verify_auth_code(saved)
             if ok:
-                info = json.loads(lm._decrypt_data(saved))
+                info = _license_core.get_license_info() or {}
                 expire_str = info.get("expire_date", "未知")
                 expire_dt = datetime.strptime(expire_str, "%Y-%m-%d %H:%M:%S")
                 days_left = (expire_dt - datetime.now()).days

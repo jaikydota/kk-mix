@@ -4,9 +4,9 @@
 a = Analysis(
     ['kk.py'],
     pathex=[],
-    binaries=[('ffmpeg.exe', '.'), ('ffprobe.exe', '.')],
-    datas=[('assets\\logo.ico', 'assets')],
-    hiddenimports=[],
+    binaries=[('ffmpeg.exe', '.'), ('ffprobe.exe', '.'), ('_license_core.cp314-win_amd64.pyd', '.')],
+    datas=[('assets\\logo.ico', 'assets'), ('docs\\使用前必看.txt', 'docs')],
+    hiddenimports=['_license_core', 'cryptography', 'cryptography.hazmat.primitives.ciphers', 'cryptography.hazmat.primitives.ciphers.algorithms', 'cryptography.hazmat.primitives.ciphers.modes', 'cryptography.hazmat.primitives.padding', 'cryptography.hazmat.backends', 'cryptography.hazmat.backends.openssl'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

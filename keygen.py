@@ -1,21 +1,16 @@
 """
 授权码生成器 - 独立 GUI 工具
 需要输入管理员密码才能使用
+核心加解密逻辑由 _license_core.pyd 提供（Cython 编译，防反编译）
 """
 
 import os
 import sys
-import json
-import base64
-import hashlib
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime, timedelta
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import padding
-from cryptography.hazmat.backends import default_backend
 
-ADMIN_PASSWORD = "REDACTED"
+import _license_core
 
 
 def _resource_path(relative_path: str) -> str:
@@ -24,44 +19,6 @@ def _resource_path(relative_path: str) -> str:
     else:
         base = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base, relative_path)
-
-
-class LicenseGenerator:
-    """授权码生成器"""
-
-    def __init__(self, app_name="REDACTED-SEED"):
-        self.app_name = app_name
-        self.secret_key = self._generate_key()
-
-    def _generate_key(self):
-        key_base = hashlib.sha256(self.app_name.encode()).digest()
-        return key_base[:32]
-
-    def _encrypt_data(self, data):
-        try:
-            iv = os.urandom(16)
-            cipher = Cipher(algorithms.AES(self.secret_key), modes.CBC(iv), backend=default_backend())
-            encryptor = cipher.encryptor()
-            padder = padding.PKCS7(128).padder()
-            padded_data = padder.update(data.encode()) + padder.finalize()
-            encrypted = encryptor.update(padded_data) + encryptor.finalize()
-            return base64.b64encode(iv + encrypted).decode()
-        except Exception:
-            return None
-
-    def generate_auth_code(self, days=30, machine_id=""):
-        try:
-            license_info = {
-                "expire_date": (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S"),
-                "create_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "days": days,
-                "version": "7.0",
-            }
-            if machine_id:
-                license_info["machine_id"] = machine_id
-            return self._encrypt_data(json.dumps(license_info))
-        except Exception:
-            return None
 
 
 class KeygenApp:
@@ -77,9 +34,7 @@ class KeygenApp:
         if os.path.exists(icon_path):
             self.root.iconbitmap(icon_path)
 
-        self.generator = LicenseGenerator()
         self.authenticated = False
-
         self._show_password_screen()
 
     def _show_password_screen(self):
@@ -108,7 +63,7 @@ class KeygenApp:
         pw_entry.bind('<Return>', lambda e: self._verify_password())
 
     def _verify_password(self):
-        if self.pw_var.get() == ADMIN_PASSWORD:
+        if _license_core.verify_admin_password(self.pw_var.get()):
             self.authenticated = True
             self.pw_frame.destroy()
             self._show_generator_screen()
@@ -123,7 +78,6 @@ class KeygenApp:
         ttk.Label(frame, text="授权码生成器",
                   font=('Microsoft YaHei', 14, 'bold')).pack(pady=(0, 15))
 
-        # 机器码输入
         mid_frame = ttk.Frame(frame)
         mid_frame.pack(fill='x', pady=(0, 8))
         ttk.Label(mid_frame, text="机器码：",
@@ -135,7 +89,6 @@ class KeygenApp:
         ttk.Label(mid_frame, text="(粘贴用户提供的机器码，留空则不绑机器)",
                   foreground='gray', font=('Microsoft YaHei', 8)).pack(side='left')
 
-        # 授权天数
         days_frame = ttk.Frame(frame)
         days_frame.pack(fill='x', pady=(0, 10))
         ttk.Label(days_frame, text="授权天数：",
@@ -178,7 +131,7 @@ class KeygenApp:
             return
 
         machine_id = self.mid_var.get().strip()
-        auth_code = self.generator.generate_auth_code(days, machine_id=machine_id)
+        auth_code = _license_core.generate_auth_code(days, machine_id=machine_id)
         if auth_code:
             self.result_text.delete('1.0', 'end')
             self.result_text.insert('1.0', auth_code)

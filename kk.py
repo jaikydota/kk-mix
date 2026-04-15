@@ -16,10 +16,8 @@ import numpy as np
 from PIL import Image, ImageTk
 import ctypes
 import shutil
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import padding as crypto_padding
-from cryptography.hazmat.backends import default_backend
 # import requests  # 线上用户系统登录时启用
+import _license_core
 import speech_tab
 import settings_window
 
@@ -39,6 +37,7 @@ VERSION_INFO = f"""\
 平台：Windows
 
 更新日志（只记录大功能迭代）：
+• v9.5  增加一机一码机制
 • v9.5  增加批量压缩功能
 • v9.4  增加用户登录授权功能
 • v9.3  增加使用前必读
@@ -54,133 +53,22 @@ VERSION_INFO = f"""\
 
 
 # ─────────────────────────────────────────────────────────────
-# 机器码采集
+# 授权核心 — 委托给 _license_core.pyd（Cython 编译，防反编译）
 # ─────────────────────────────────────────────────────────────
 
-def _get_machine_id() -> str:
-    """采集本机唯一标识（主板UUID + CPU ID → MD5 哈希），格式 XXXX-XXXX-XXXX-XXXX。
-    换硬盘/内存/网卡不影响，只有换主板或CPU才会变化。"""
-    raw = ""
-    try:
-        r = subprocess.run(
-            ["wmic", "csproduct", "get", "UUID"],
-            capture_output=True, text=True, timeout=5,
-        )
-        raw += r.stdout.strip()
-    except Exception:
-        pass
-    try:
-        r = subprocess.run(
-            ["wmic", "cpu", "get", "ProcessorId"],
-            capture_output=True, text=True, timeout=5,
-        )
-        raw += r.stdout.strip()
-    except Exception:
-        pass
-    h = hashlib.md5(raw.encode()).hexdigest()[:16].upper()
-    return f"{h[:4]}-{h[4:8]}-{h[8:12]}-{h[12:16]}"
-
-
-# ─────────────────────────────────────────────────────────────
-# 授权管理器
-# ─────────────────────────────────────────────────────────────
-
-class LicenseManager:
-    """授权管理器 - 授权码验证"""
-
-    def __init__(self, app_name="REDACTED-SEED"):
-        self.app_name = app_name
-        self.secret_key = self._generate_key()
-        app_data = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "vek")
-        os.makedirs(app_data, exist_ok=True)
-        self.license_file = os.path.join(app_data, ".vek_li")
-
-    def _generate_key(self):
-        key_base = hashlib.sha256(self.app_name.encode()).digest()
-        return key_base[:32]
-
-    def _encrypt_data(self, data):
-        try:
-            iv = os.urandom(16)
-            cipher = Cipher(algorithms.AES(self.secret_key), modes.CBC(iv), backend=default_backend())
-            encryptor = cipher.encryptor()
-            padder = crypto_padding.PKCS7(128).padder()
-            padded_data = padder.update(data.encode()) + padder.finalize()
-            encrypted = encryptor.update(padded_data) + encryptor.finalize()
-            return base64.b64encode(iv + encrypted).decode()
-        except Exception:
-            return None
-
-    def _decrypt_data(self, encrypted_data):
-        try:
-            decoded = base64.b64decode(encrypted_data.encode())
-            iv = decoded[:16]
-            encrypted = decoded[16:]
-            cipher = Cipher(algorithms.AES(self.secret_key), modes.CBC(iv), backend=default_backend())
-            decryptor = cipher.decryptor()
-            padded_data = decryptor.update(encrypted) + decryptor.finalize()
-            unpadder = crypto_padding.PKCS7(128).unpadder()
-            data = unpadder.update(padded_data) + unpadder.finalize()
-            return data.decode()
-        except Exception:
-            return None
-
-    def verify_auth_code(self, auth_code):
-        try:
-            decrypted_data = self._decrypt_data(auth_code)
-            if not decrypted_data:
-                return False, "授权码无效或损坏，请联系管理员"
-            license_info = json.loads(decrypted_data)
-            bound_machine = license_info.get("machine_id")
-            if bound_machine != _get_machine_id():
-                return False, "授权码与本机不匹配，请联系管理员重新生成"
-            expire_date_str = license_info.get("expire_date")
-            expire_date = datetime.strptime(expire_date_str, "%Y-%m-%d %H:%M:%S")
-            now = datetime.now()
-            create_date_str = license_info.get("create_date")
-            if create_date_str:
-                create_date = datetime.strptime(create_date_str, "%Y-%m-%d %H:%M:%S")
-                if now < create_date:
-                    return False, "系统时间异常，请检查系统时间设置"
-            if now > expire_date:
-                return False, f"授权码已过期（过期时间：{expire_date_str}）"
-            days_left = (expire_date - now).days
-            return True, f"授权验证成功，剩余 {days_left} 天"
-        except Exception as e:
-            return False, f"授权码验证失败: {str(e)}"
-
-    def save_license(self, auth_code):
-        try:
-            encrypted = self._encrypt_data(auth_code)
-            with open(self.license_file, 'w') as f:
-                f.write(encrypted)
-            return True
-        except Exception:
-            return False
-
-    def load_license(self):
-        if not os.path.exists(self.license_file):
-            return None
-        try:
-            with open(self.license_file, 'r') as f:
-                encrypted = f.read()
-            return self._decrypt_data(encrypted)
-        except Exception:
-            return None
+_get_machine_id = _license_core.get_machine_id
 
 
 def show_license_dialog(root):
     """显示授权验证对话框，返回 True 表示授权通过"""
-    lm = LicenseManager()
-
-    saved_code = lm.load_license()
+    saved_code = _license_core.load_license()
     if saved_code:
-        ok, msg = lm.verify_auth_code(saved_code)
+        ok, msg = _license_core.verify_auth_code(saved_code)
         if ok:
             return True
 
     result = {"authorized": False}
-    machine_id = _get_machine_id()
+    machine_id = _license_core.get_machine_id()
 
     dialog = tk.Toplevel(root)
     dialog.title("软件授权验证")
@@ -229,9 +117,9 @@ def show_license_dialog(root):
         if not code:
             status_label.config(text="请输入授权码", foreground='red')
             return
-        ok, msg = lm.verify_auth_code(code)
+        ok, msg = _license_core.verify_auth_code(code)
         if ok:
-            lm.save_license(code)
+            _license_core.save_license(code)
             result["authorized"] = True
             status_label.config(text=msg, foreground='green')
             dialog.after(600, dialog.destroy)
