@@ -10,6 +10,8 @@ dependencies = [
     "numpy==2.0.2",
     "openai>=2.24.0",
     "pillow==11.3.0",
+    "pyside6>=6.11.0",
+    "pyside6-fluent-widgets[full]>=1.11.2",
 ]
 
 [dependency-groups]

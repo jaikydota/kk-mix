@@ -1,0 +1,1 @@
+uv run python kk_qt.py

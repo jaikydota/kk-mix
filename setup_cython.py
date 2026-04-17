@@ -23,4 +23,6 @@ setup(
             "wraparound": False,
         },
     ),
+    packages=[],
+    py_modules=[],
 )
