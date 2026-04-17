@@ -5,7 +5,10 @@
 """
 from __future__ import annotations
 
+import os
+
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QHBoxLayout, QVBoxLayout
 
 from qfluentwidgets import (
@@ -16,6 +19,8 @@ from qfluentwidgets import (
     PushButton,
     StrongBodyLabel,
 )
+
+from qt.core.paths import resource_path
 
 try:
     import _license_core  # type: ignore
@@ -34,9 +39,14 @@ class LicenseDialog(QDialog):
         self.setWindowTitle("软件授权验证")
         self.setMinimumWidth(480)
         self.setWindowFlags(
-            self.windowFlags()
-            & ~Qt.WindowType.WindowContextHelpButtonHint
+            Qt.WindowType.Window
+            | Qt.WindowType.WindowTitleHint
+            | Qt.WindowType.WindowCloseButtonHint
+            | Qt.WindowType.CustomizeWindowHint
         )
+        icon_path = resource_path(os.path.join("assets", "logo.ico"))
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
@@ -113,7 +123,7 @@ class LicenseDialog(QDialog):
             self.tip_label.setStyleSheet("color: #c42b1c;")
 
 
-def check_license(parent) -> bool:
+def check_license(parent=None) -> bool:
     """已有有效授权直接放行；否则弹窗验证。"""
     if _license_core is None:
         return True  # 开发模式兜底

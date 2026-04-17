@@ -27,10 +27,11 @@ def main():
     window = MainWindow()
 
     # 首次启动必读协议（与原版顺序一致：readme → license）
-    if not check_readme(window):
+    # parent=None 使对话框作为独立顶层窗口，在任务栏显示图标
+    if not check_readme():
         sys.exit(0)
 
-    if not check_license(window):
+    if not check_license():
         sys.exit(0)
 
     window.show()

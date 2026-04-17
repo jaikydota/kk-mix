@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 
 from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QLabel, QPlainTextEdit,
     QScrollBar, QSizePolicy, QVBoxLayout, QWidget,
@@ -62,12 +63,14 @@ class ReadmeDialog(QDialog):
         self.setWindowTitle("使用前必看 — 请仔细阅读后方可使用")
         self.setMinimumSize(580, 480)
         self.setWindowFlags(
-            self.windowFlags()
-            & ~Qt.WindowType.WindowContextHelpButtonHint
+            Qt.WindowType.Window
+            | Qt.WindowType.WindowTitleHint
             | Qt.WindowType.MSWindowsFixedSizeDialogHint
+            | Qt.WindowType.CustomizeWindowHint
         )
-        # 禁止通过关闭按钮退出（必须点按钮）
-        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
+        icon_path = resource_path(os.path.join("assets", "logo.ico"))
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         self._time_ok = False
         self._scroll_ok = False
