@@ -19,6 +19,7 @@ from qfluentwidgets import (
     BodyLabel,
     FluentIcon,
     InfoBar,
+    InfoBarIcon,
     InfoBarPosition,
     NavigationInterface,
     NavigationItemPosition,
@@ -92,8 +93,17 @@ class MainWindow(QMainWindow):
         body_layout.setSpacing(0)
 
         self.nav = NavigationInterface(self, showMenuButton=True)
+        self.nav.setExpandWidth(180)
         self.stack = QStackedWidget(self)
+
         body_layout.addWidget(self.nav)
+
+        sep = QFrame(self)
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setStyleSheet("color: rgba(0,0,0,0.10);")
+        sep.setFixedWidth(1)
+        body_layout.addWidget(sep)
+
         body_layout.addWidget(self.stack, 1)
 
         bottom = self._build_bottom_panel()
@@ -198,7 +208,10 @@ class MainWindow(QMainWindow):
         )
 
         if self.stack.count() > 0:
+            first_tab = self.stack.widget(0)
             self.stack.setCurrentIndex(0)
+            if isinstance(first_tab, BaseTab):
+                self.nav.setCurrentItem(first_tab.NAME)
 
     def _add_tab(self, tab: BaseTab):
         self.stack.addWidget(tab)
@@ -215,7 +228,7 @@ class MainWindow(QMainWindow):
 
     def _show_about(self, *_):
         InfoBar.info(
-            APP_TITLE, "Qt + Fluent 重构版本。",
+            APP_TITLE, "重构UI界面",
             parent=self, position=InfoBarPosition.TOP_RIGHT, duration=3000,
         )
 
@@ -285,16 +298,35 @@ class MainWindow(QMainWindow):
             self._trigger_btn.setEnabled(True)
         self.set_status("完成" if success else "结束（含失败）")
 
+        out_dir = ""
+        if self.current_worker:
+            out_dir = self.current_worker.output_dir or ""
+
+        has_dir = out_dir and os.path.isdir(out_dir)
+
         if success:
-            InfoBar.success(
-                "处理完成", summary, parent=self,
-                position=InfoBarPosition.TOP_RIGHT, duration=4000,
+            bar = InfoBar.new(
+                InfoBarIcon.SUCCESS, "处理完成", summary,
+                Qt.Orientation.Horizontal,
+                isClosable=True, parent=self,
+                position=InfoBarPosition.TOP, duration=8000,
             )
         else:
-            InfoBar.warning(
-                "处理结束", summary, parent=self,
-                position=InfoBarPosition.TOP_RIGHT, duration=4000,
+            bar = InfoBar.new(
+                InfoBarIcon.WARNING, "处理结束", summary,
+                Qt.Orientation.Horizontal,
+                isClosable=True, parent=self,
+                position=InfoBarPosition.TOP, duration=8000,
             )
+
+        if has_dir:
+            open_btn = PushButton("打开文件夹", bar, FluentIcon.FOLDER)
+            open_btn.setFixedHeight(30)
+            open_btn.clicked.connect(
+                lambda *_, d=out_dir: os.startfile(d)  # noqa: S606
+            )
+            bar.addWidget(open_btn)
+
         self.current_worker = None
 
     def _on_pause_resume(self):

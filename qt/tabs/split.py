@@ -21,6 +21,7 @@ class SplitWorker(BatchWorker):
         super().__init__(ffmpeg_path, ctrl, settings)
         self.folder = folder
         self.output = output
+        self.output_dir = output
         self.audio_output = audio_output
         self.duration = duration
         self.extract_audio = extract_audio

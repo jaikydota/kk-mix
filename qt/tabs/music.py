@@ -22,6 +22,7 @@ class MusicWorker(BatchWorker):
         self.video_folder = video_folder
         self.audio_folder = audio_folder
         self.output_folder = output_folder
+        self.output_dir = output_folder
         self.keep_original = keep_original
 
     def run_batch(self) -> tuple[bool, str]:

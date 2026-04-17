@@ -202,7 +202,6 @@ class SettingsDialog(MessageBoxBase):
         mid_h.setContentsMargins(0, 0, 0, 0)
         mid_h.setSpacing(8)
         mid_label = BodyLabel(f"本机机器码：{mid}", card)
-        mid_label.setStyleSheet("font-family: Consolas;")
         mid_h.addWidget(mid_label)
         copy_btn = PushButton("复制", card)
         copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(mid))

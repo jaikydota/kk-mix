@@ -38,6 +38,7 @@ class TitleWorker(BatchWorker):
         super().__init__(ffmpeg_path, ctrl, settings)
         self.video_folder = video_folder
         self.output_folder = output_folder
+        self.output_dir = output_folder
         self.font_path = font_path
         self.title_lines = title_lines
         self.fixed_title = fixed_title

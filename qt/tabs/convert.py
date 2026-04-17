@@ -22,6 +22,7 @@ class ConvertWorker(BatchWorker):
         super().__init__(ffmpeg_path, ctrl, settings)
         self.folder = folder
         self.output_folder = output_folder
+        self.output_dir = output_folder
         self.target_format = target_format
 
     def run_batch(self) -> tuple[bool, str]:

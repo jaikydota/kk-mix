@@ -67,6 +67,7 @@ class ConcatWorker(BatchWorker):
         super().__init__(ffmpeg_path, ctrl, settings)
         self.folders = folders
         self.output = output
+        self.output_dir = output
         self.td = transition_duration
         self.transition_type = transition_type
 

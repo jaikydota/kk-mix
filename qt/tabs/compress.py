@@ -23,6 +23,7 @@ class CompressWorker(BatchWorker):
         super().__init__(ffmpeg_path, ctrl, settings)
         self.source_folder = source_folder
         self.output_folder = output_folder
+        self.output_dir = output_folder
         self.bitrate = bitrate
         self.use_h265 = use_h265
 

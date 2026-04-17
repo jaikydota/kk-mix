@@ -29,6 +29,7 @@ class MergeWorker(BatchWorker):
         self.folder1 = folder1
         self.folder2 = folder2
         self.output = output
+        self.output_dir = output
         self.audio_source = audio_source     # "folder1" | "folder2" | "none"
         self.image_duration = image_duration
 
@@ -140,7 +141,7 @@ class MergeWorker(BatchWorker):
 class MergeTab(BaseTab):
     NAME = "merge"
     TITLE = "左右分屏合并"
-    ICON = FluentIcon.ALIGNMENT
+    ICON = FluentIcon.BACK_TO_WINDOW
 
     def build_form(self):
         self.folder1 = LineEdit(self)

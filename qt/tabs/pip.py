@@ -30,6 +30,7 @@ class PipWorker(BatchWorker):
         self.bg_folder = bg_folder
         self.fg_folder = fg_folder
         self.output = output
+        self.output_dir = output
         self.position = position
         self.scale = scale
 

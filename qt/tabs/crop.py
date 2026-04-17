@@ -24,6 +24,7 @@ class CropWorker(BatchWorker):
         super().__init__(ffmpeg_path, ctrl, settings)
         self.source_folder = source_folder
         self.output_folder = output_folder
+        self.output_dir = output_folder
         self.ratio_str = ratio_str
         self.is_image = is_image
         self.rw, self.rh = [int(x) for x in ratio_str.split(":")]

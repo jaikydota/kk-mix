@@ -46,6 +46,7 @@ class BatchWorker(QThread):
         super().__init__(parent)
         self.ffmpeg_path = ffmpeg_path
         self.ctrl = ctrl
+        self.output_dir: str = ""
         # 拷贝快照，避免跨线程读写
         self.settings = AppSettings(**{**settings.__dict__})
 
@@ -82,7 +83,7 @@ class BatchWorker(QThread):
         """统一执行子进程命令（隐藏黑窗 + 屏蔽编码异常）。"""
         if self.settings.verbose_log:
             self.log(f"[CMD] {' '.join(str(x) for x in cmd)}")
-        return subprocess.run(
+        result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
@@ -91,3 +92,11 @@ class BatchWorker(QThread):
             encoding="utf-8",
             errors="ignore",
         )
+        if self.settings.verbose_log:
+            if result.stdout and result.stdout.strip():
+                self.log(f"[STDOUT] {result.stdout.strip()}")
+            if result.stderr and result.stderr.strip():
+                self.log(f"[STDERR] {result.stderr.strip()}")
+            if result.returncode != 0:
+                self.log(f"[EXIT] returncode={result.returncode}")
+        return result

@@ -19,6 +19,7 @@ class VolumeWorker(BatchWorker):
         super().__init__(ffmpeg_path, ctrl, settings)
         self.folder = folder
         self.output_folder = output_folder
+        self.output_dir = output_folder
         self.factor = factor
 
     def run_batch(self) -> tuple[bool, str]:

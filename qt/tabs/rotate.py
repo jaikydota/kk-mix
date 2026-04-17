@@ -36,6 +36,7 @@ class RotateWorker(BatchWorker):
         super().__init__(ffmpeg_path, ctrl, settings)
         self.folder = folder
         self.output_folder = output_folder
+        self.output_dir = output_folder
         self.angle = angle
 
     def run_batch(self) -> tuple[bool, str]:

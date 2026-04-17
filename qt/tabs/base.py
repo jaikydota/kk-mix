@@ -58,9 +58,9 @@ class BaseTab(QWidget):
         header.setStyleSheet("font-size: 22px; font-weight: 600;")
         outer.addWidget(header)
 
-        self.form_card = CardWidget(self)
+        self.form_card = QWidget(self)
         self.form_layout = QGridLayout(self.form_card)
-        self.form_layout.setContentsMargins(24, 24, 24, 24)
+        self.form_layout.setContentsMargins(8, 8, 8, 8)
         self.form_layout.setHorizontalSpacing(14)
         self.form_layout.setVerticalSpacing(14)
         self.build_form()

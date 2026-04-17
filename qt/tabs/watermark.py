@@ -31,6 +31,7 @@ class WatermarkWorker(BatchWorker):
         self.video_folder = video_folder
         self.watermark_image = watermark_image
         self.output_folder = output_folder
+        self.output_dir = output_folder
         self.position = position
         self.opacity = opacity
         self.scale = scale
