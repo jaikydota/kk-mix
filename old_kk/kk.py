@@ -22,7 +22,7 @@ import speech_tab
 import settings_window
 
 VERSION = "v9.6.0"
-APP_TITLE = f"出海帮 - 巨量剪辑工具 {VERSION}"
+APP_TITLE = f"出海帮 - 超大杯剪辑工具 {VERSION}"
 
 def _resource_path(relative_path: str) -> str:
     """获取资源文件的绝对路径，兼容开发环境和 PyInstaller 打包后环境。"""
@@ -364,7 +364,7 @@ def show_readme_dialog(root) -> bool:
 #     result = {"authorized": False}
 #
 #     dialog = tk.Toplevel(root)
-#     dialog.title("登录 出海帮 - 巨量剪辑工具")
+#     dialog.title("登录 出海帮 - 超大杯剪辑工具")
 #     dialog.resizable(False, False)
 #     dialog.grab_set()
 #
