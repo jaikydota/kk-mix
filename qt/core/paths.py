@@ -7,8 +7,8 @@ import subprocess
 from pathlib import Path
 
 
-VERSION = "v10.0.1"
-APP_TITLE = f"出海帮 - 超大杯剪辑工具 {VERSION}"
+VERSION = "v10.0.2"
+APP_TITLE = f"出海帮 - 超大杯混剪系统 {VERSION}"
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
