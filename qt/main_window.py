@@ -45,6 +45,7 @@ from qt.tabs.pip import PipTab
 from qt.tabs.rotate import RotateTab
 from qt.tabs.speed import SpeedTab
 from qt.tabs.split import SplitTab
+from qt.tabs.subtitle_concat import SubtitleConcatTab
 from qt.tabs.title import TitleTab
 from qt.tabs.volume import VolumeTab
 from qt.tabs.watermark import WatermarkTab
@@ -174,6 +175,7 @@ class MainWindow(QMainWindow):
         tabs: list[BaseTab] = [
             MergeTab(self),
             ConcatTab(self),
+            SubtitleConcatTab(self),
             SplitTab(self),
             PipTab(self),
             SpeedTab(self),

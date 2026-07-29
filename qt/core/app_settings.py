@@ -11,6 +11,10 @@ from pathlib import Path
 
 @dataclass
 class AppSettings:
+    # TTS 语音服务（字幕转场拼接的配音合成）
+    tts_base_url: str = ""
+    tts_api_key: str = ""
+
     # 调试
     verbose_log: bool = False
 

@@ -27,7 +27,9 @@ from qfluentwidgets import (
     ComboBox,
     InfoBar,
     InfoBarPosition,
+    LineEdit,
     MessageBoxBase,
+    PasswordLineEdit,
     PushButton,
     SpinBox,
     StrongBodyLabel,
@@ -80,6 +82,7 @@ class SettingsDialog(MessageBoxBase):
         body_v.setContentsMargins(0, 0, 0, 0)
         body_v.setSpacing(12)
 
+        self._build_tts_card(body_v)
         self._build_debug_card(body_v)
         self._build_perf_card(body_v)
         self._build_license_card(body_v)
@@ -98,6 +101,24 @@ class SettingsDialog(MessageBoxBase):
         self._refresh_bitrate_state()
 
     # ─── 各 section ───
+    def _build_tts_card(self, layout: QVBoxLayout):
+        card, g = _section("TTS 语音服务", self)
+        g.addWidget(BodyLabel("服务地址:", card), 0, 0)
+        self.tts_base_url = LineEdit(card)
+        self.tts_base_url.setText(self.settings.tts_base_url)
+        g.addWidget(self.tts_base_url, 0, 1)
+
+        g.addWidget(BodyLabel("API Key:", card), 1, 0)
+        self.tts_api_key = PasswordLineEdit(card)
+        self.tts_api_key.setText(self.settings.tts_api_key)
+        g.addWidget(self.tts_api_key, 1, 1)
+
+        hint = BodyLabel("用于「字幕转场拼接」的配音合成", card)
+        hint.setStyleSheet("color: #8a8a8a;")
+        g.addWidget(hint, 2, 0, 1, 2)
+        g.setColumnStretch(1, 1)
+        layout.addWidget(card)
+
     def _build_debug_card(self, layout: QVBoxLayout):
         card, g = _section("调试选项", self)
         self.verbose_log = CheckBox("打印详细日志", card)
@@ -200,6 +221,8 @@ class SettingsDialog(MessageBoxBase):
 
     # ─── 保存 ───
     def _on_save(self):
+        self.settings.tts_base_url = self.tts_base_url.text().strip()
+        self.settings.tts_api_key = self.tts_api_key.text().strip()
         self.settings.verbose_log = self.verbose_log.isChecked()
         self.settings.thread_count = self.thread_count.value()
         self.settings.speed_priority = self.speed_priority.isChecked()
