@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 VERSION = "v10.1.0"
-APP_TITLE = f"出海帮 - 巨量剪辑 {VERSION}"
+APP_TITLE = f"中巨量 - 巨量剪辑 {VERSION}"
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}

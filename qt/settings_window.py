@@ -27,9 +27,7 @@ from qfluentwidgets import (
     ComboBox,
     InfoBar,
     InfoBarPosition,
-    LineEdit,
     MessageBoxBase,
-    PasswordLineEdit,
     PushButton,
     SpinBox,
     StrongBodyLabel,
@@ -82,8 +80,6 @@ class SettingsDialog(MessageBoxBase):
         body_v.setContentsMargins(0, 0, 0, 0)
         body_v.setSpacing(12)
 
-        self._build_mcp_card(body_v)
-        self._build_llm_card(body_v)
         self._build_debug_card(body_v)
         self._build_perf_card(body_v)
         self._build_license_card(body_v)
@@ -102,38 +98,6 @@ class SettingsDialog(MessageBoxBase):
         self._refresh_bitrate_state()
 
     # ─── 各 section ───
-    def _build_mcp_card(self, layout: QVBoxLayout):
-        card, g = _section("MCP 服务配置", self)
-        g.addWidget(BodyLabel("MCP 地址:", card), 0, 0)
-        self.mcp_url = LineEdit(card)
-        self.mcp_url.setText(self.settings.mcp_url)
-        g.addWidget(self.mcp_url, 0, 1)
-        hint = BodyLabel("该地址由视频配音等功能共享使用", card)
-        hint.setStyleSheet("color: #8a8a8a;")
-        g.addWidget(hint, 1, 0, 1, 2)
-        g.setColumnStretch(1, 1)
-        layout.addWidget(card)
-
-    def _build_llm_card(self, layout: QVBoxLayout):
-        card, g = _section("LLM 翻译配置", self)
-        g.addWidget(BodyLabel("API Base:", card), 0, 0)
-        self.llm_api_base = LineEdit(card)
-        self.llm_api_base.setText(self.settings.llm_api_base)
-        g.addWidget(self.llm_api_base, 0, 1)
-
-        g.addWidget(BodyLabel("API Key:", card), 1, 0)
-        self.llm_api_key = PasswordLineEdit(card)
-        self.llm_api_key.setText(self.settings.llm_api_key)
-        g.addWidget(self.llm_api_key, 1, 1)
-
-        g.addWidget(BodyLabel("模型:", card), 2, 0)
-        self.llm_model = LineEdit(card)
-        self.llm_model.setText(self.settings.llm_model)
-        g.addWidget(self.llm_model, 2, 1)
-
-        g.setColumnStretch(1, 1)
-        layout.addWidget(card)
-
     def _build_debug_card(self, layout: QVBoxLayout):
         card, g = _section("调试选项", self)
         self.verbose_log = CheckBox("打印详细日志", card)
@@ -236,16 +200,6 @@ class SettingsDialog(MessageBoxBase):
 
     # ─── 保存 ───
     def _on_save(self):
-        mcp_url = self.mcp_url.text().strip()
-        if not mcp_url:
-            InfoBar.warning("MCP 地址不能为空", "", parent=self,
-                            position=InfoBarPosition.TOP)
-            return
-
-        self.settings.mcp_url = mcp_url
-        self.settings.llm_api_base = self.llm_api_base.text().strip()
-        self.settings.llm_api_key = self.llm_api_key.text().strip()
-        self.settings.llm_model = self.llm_model.text().strip()
         self.settings.verbose_log = self.verbose_log.isChecked()
         self.settings.thread_count = self.thread_count.value()
         self.settings.speed_priority = self.speed_priority.isChecked()

@@ -11,12 +11,6 @@ from pathlib import Path
 
 @dataclass
 class AppSettings:
-    # MCP / LLM
-    mcp_url: str = "http://localhost:8400/mcp"
-    llm_api_base: str = "https://api.openai.com/v1"
-    llm_api_key: str = ""
-    llm_model: str = "gpt-4o"
-
     # 调试
     verbose_log: bool = False
 
