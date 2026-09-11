@@ -107,9 +107,13 @@ kk_qt.py
 - **构建**：先 `uv run python setup_cython.py build_ext --inplace`，再 `build_qt.cmd`
 - **打包排除**：`kk_qt.spec` 已排除 tkinter / moviepy / matplotlib 等无关大模块
 - **UPX 白名单**：Qt6*.dll 和 VC Runtime 禁止 UPX 压缩（会导致启动崩溃）
-- **窗口最小高度**：`NavigationInterface` 每加一项就抬高自身 `minimumHeight`（18 项约 870px），
-  会把主窗口顶到小屏幕装不下。主窗口把 nav 包进 `QScrollArea`（`_sync_nav_width` 同步宽度），
-  `BaseTab` 表单也整体放在滚动区里——这两处都别回退成直接 addWidget
+- **窗口最小高度**：`NavigationInterface` 每加一项就抬高自身 `minimumHeight`（18 项约 880px），
+  且 `layoutMinHeight()` 会重复计入间距、多算一个菜单按钮高度，比真实需要的高约 110px。
+  主窗口用 `SingleDirectionScrollArea` 包 nav（悬浮滚动条不占宽，`_sync_nav_width` 同步宽度），
+  并在注册完所有项后用 `_relax_nav_min_height()` 按真实内容重算；`BaseTab` 表单也整体放在
+  滚动区里——这几处都别回退成直接 addWidget
+- **日志区**：`_set_log_mode()` 管理 collapsed / normal / maximized，默认 collapsed；
+  必须在 `showEvent` 里再套用一次，构造期 splitter 尚未布局，`setSizes` 会被 show 时重新分配掉
 - **依赖**：新增第三方库前确认确有引用；`pyproject.toml` 改动后运行 `uv lock`
 
 ## 已知待办

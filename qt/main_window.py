@@ -25,6 +25,7 @@ from qfluentwidgets import (
     InfoBarPosition,
     NavigationInterface,
     NavigationItemPosition,
+    NavigationSeparator,
     ProgressBar,
     PushButton,
     SingleDirectionScrollArea,
@@ -64,7 +65,8 @@ class MainWindow(QMainWindow):
         self.ctrl = BatchControl()
         self.current_worker: BatchWorker | None = None
         self._trigger_btn: PushButton | None = None
-        self._log_mode = "normal"
+        self._log_mode = "collapsed"   # 默认折叠日志，竖向空间留给表单
+        self._log_mode_applied = False
 
         self.settings = AppSettings.load(settings_path())
 
@@ -147,10 +149,43 @@ class MainWindow(QMainWindow):
         """滚动区宽度跟随导航栏的展开/收起（滚动条悬浮，不需要额外留宽）。"""
         self.nav_scroll.setFixedWidth(self.nav.width())
 
+    def _relax_nav_min_height(self):
+        """按导航项的真实高度重设 nav 的最小高度。
+
+        qfluentwidgets 的 layoutMinHeight() 会把已含在 minimumSize 里的间距
+        再累加一遍、并额外多算一个菜单按钮高度，18 项时比实际需要的高约 110px，
+        表现为底部分组上方一大片空白，且默认窗口尺寸下还得多滚一截。
+        """
+        try:
+            panel = self.nav.panel
+            margins = panel.contentsMargins()
+            needed = (
+                panel.topLayout.minimumSize().height()
+                + panel.bottomLayout.minimumSize().height()
+                + sum(s.height() for s in panel.findChildren(NavigationSeparator))
+                + margins.top() + margins.bottom()
+                + 8   # 余量，避免贴边
+            )
+            if needed > 0:
+                self.nav.setMinimumHeight(needed)
+        except Exception:
+            pass   # qfluentwidgets 内部结构变动时退回它自己的保守值
+
     def eventFilter(self, obj, event):
         if obj is self.nav and event.type() == QEvent.Type.Resize:
             self._sync_nav_width()
         return super().eventFilter(obj, event)
+
+    def showEvent(self, event):
+        """首次显示后再套用一次日志模式。
+
+        构造期 splitter 还没布局（高度只有几十像素），此时 setSizes 的结果
+        会在 show 时被重新分配掉，日志区不会真的折叠。
+        """
+        super().showEvent(event)
+        if not self._log_mode_applied:
+            self._log_mode_applied = True
+            self._set_log_mode(self._log_mode)
 
     def _build_bottom_panel(self) -> QWidget:
         panel = QFrame(self)
@@ -291,6 +326,7 @@ class MainWindow(QMainWindow):
             selectable=False,
         )
 
+        self._relax_nav_min_height()
         self._sync_nav_width()
         self._set_log_mode(self._log_mode)
 
