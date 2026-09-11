@@ -1,6 +1,8 @@
 """主窗口：左侧 NavigationInterface + 右侧 QStackedWidget + 底部日志/进度/控制面板。"""
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 
 from PySide6.QtCore import Qt
@@ -31,7 +33,8 @@ from qfluentwidgets import (
 from qt.core.app_settings import AppSettings
 from qt.core.batch_worker import BatchControl, BatchWorker
 from qt.core.ffmpeg_helper import find_ffmpeg
-from qt.core.paths import APP_TITLE, resource_path, settings_path
+from qt.core import i18n
+from qt.core.paths import APP_NAME, VERSION, resource_path, settings_path
 
 from qt.tabs.base import BaseTab
 from qt.tabs.compress import CompressTab
@@ -52,6 +55,8 @@ from qt.tabs.watermark import WatermarkTab
 
 
 class MainWindow(QMainWindow):
+    _instance: "MainWindow | None" = None   # 语言切换重建后的当前窗口
+
     def __init__(self):
         super().__init__()
         self.ctrl = BatchControl()
@@ -62,7 +67,7 @@ class MainWindow(QMainWindow):
 
         self.ffmpeg_path = find_ffmpeg()
 
-        self.setWindowTitle(APP_TITLE)
+        self.setWindowTitle(f"{tr(APP_NAME)} {VERSION}")
         self.resize(1180, 820)
         icon_path = resource_path(os.path.join("assets", "logo.ico"))
         if os.path.exists(icon_path):
@@ -73,8 +78,8 @@ class MainWindow(QMainWindow):
 
         if not self.ffmpeg_path:
             InfoBar.error(
-                "未找到 FFmpeg",
-                "请把 ffmpeg.exe 放在程序目录或加入系统 PATH。",
+                tr("未找到 FFmpeg"),
+                tr("请把 ffmpeg.exe 放在程序目录或加入系统 PATH。"),
                 parent=self, duration=-1,
                 position=InfoBarPosition.TOP,
             )
@@ -133,25 +138,25 @@ class MainWindow(QMainWindow):
         top = QHBoxLayout()
         top.setSpacing(10)
 
-        self.status_label = BodyLabel("就绪", self)
+        self.status_label = BodyLabel(tr("就绪"), self)
         self.status_label.setMinimumWidth(160)
 
         self.progress = ProgressBar(self)
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
 
-        self.pause_btn = PushButton("暂停", self, FluentIcon.PAUSE)
+        self.pause_btn = PushButton(tr("暂停"), self, FluentIcon.PAUSE)
         self.pause_btn.setEnabled(False)
         self.pause_btn.clicked.connect(self._on_pause_resume)
 
-        self.stop_btn = PushButton("停止", self, FluentIcon.CLOSE)
+        self.stop_btn = PushButton(tr("停止"), self, FluentIcon.CLOSE)
         self.stop_btn.setEnabled(False)
         self.stop_btn.clicked.connect(self._on_stop)
 
-        self.clear_btn = PushButton("清空日志", self, FluentIcon.DELETE)
+        self.clear_btn = PushButton(tr("清空日志"), self, FluentIcon.DELETE)
         self.clear_btn.clicked.connect(lambda: self.log_view.clear())
 
-        self.export_btn = PushButton("导出日志", self, FluentIcon.SAVE)
+        self.export_btn = PushButton(tr("导出日志"), self, FluentIcon.SAVE)
         self.export_btn.clicked.connect(self._export_log)
 
         top.addWidget(self.status_label)
@@ -164,7 +169,7 @@ class MainWindow(QMainWindow):
 
         self.log_view = TextEdit(self)
         self.log_view.setReadOnly(True)
-        self.log_view.setPlaceholderText("操作日志会显示在这里…")
+        self.log_view.setPlaceholderText(tr("操作日志会显示在这里…"))
         v.addWidget(self.log_view, 1)
 
         return panel
@@ -192,10 +197,19 @@ class MainWindow(QMainWindow):
         for tab in tabs:
             self._add_tab(tab)
 
+        other = "en" if i18n.current() == "zh" else "zh"
+        self.nav.addItem(
+            routeKey="language",
+            icon=FluentIcon.LANGUAGE,
+            text=i18n.LANGUAGE_NAMES[other],
+            onClick=self._toggle_language,
+            position=NavigationItemPosition.BOTTOM,
+            selectable=False,
+        )
         self.nav.addItem(
             routeKey="settings",
             icon=FluentIcon.SETTING,
-            text="全局设置",
+            text=tr("全局设置"),
             onClick=self._open_settings,
             position=NavigationItemPosition.BOTTOM,
             selectable=False,
@@ -203,7 +217,7 @@ class MainWindow(QMainWindow):
         self.nav.addItem(
             routeKey="about",
             icon=FluentIcon.INFO,
-            text="关于",
+            text=tr("关于"),
             onClick=self._show_about,
             position=NavigationItemPosition.BOTTOM,
             selectable=False,
@@ -220,9 +234,33 @@ class MainWindow(QMainWindow):
         self.nav.addItem(
             routeKey=tab.NAME,
             icon=tab.ICON,
-            text=tab.TITLE,
+            text=tr(tab.TITLE),
             onClick=lambda *_, t=tab: self.stack.setCurrentWidget(t),
         )
+
+    def _toggle_language(self, *_):
+        """中英文切换：保存设置后重建主窗口（日志内容保留）。"""
+        if self.current_worker and self.current_worker.isRunning():
+            InfoBar.warning(
+                tr("有任务进行中"), tr("请等待当前任务结束后再切换语言。"),
+                parent=self, position=InfoBarPosition.TOP,
+            )
+            return
+        new_lang = "en" if i18n.current() == "zh" else "zh"
+        self.settings.language = new_lang
+        try:
+            self.settings.save(settings_path())
+        except Exception as e:
+            self.log(tr("[设置] 保存失败: {0}").format(e))
+        i18n.set_language(new_lang)
+
+        win = MainWindow()
+        win.setGeometry(self.geometry())
+        win.log_view.setHtml(self.log_view.toHtml())
+        win.show()
+        MainWindow._instance = win   # 持有引用，防止被回收
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self.close()
 
     def _open_settings(self, *_):
         from qt.settings_window import SettingsDialog
@@ -230,7 +268,7 @@ class MainWindow(QMainWindow):
 
     def _show_about(self, *_):
         InfoBar.info(
-            APP_TITLE, "基于 FFmpeg 的批量视频混剪工具（MIT 开源）",
+            f"{tr(APP_NAME)} {VERSION}", tr("基于 FFmpeg 的批量视频混剪工具（MIT 开源）"),
             parent=self, position=InfoBarPosition.TOP_RIGHT, duration=3000,
         )
 
@@ -254,11 +292,11 @@ class MainWindow(QMainWindow):
         text = self.log_view.toPlainText().strip()
         if not text:
             InfoBar.info(
-                "提示", "操作日志为空，无需导出。",
+                tr("提示"), tr("操作日志为空，无需导出。"),
                 parent=self, position=InfoBarPosition.TOP,
             )
             return
-        folder = QFileDialog.getExistingDirectory(self, "选择日志导出文件夹")
+        folder = QFileDialog.getExistingDirectory(self, tr("选择日志导出文件夹"))
         if not folder:
             return
         name = datetime.now().strftime("%Y%m%d_%H%M%S") + f"_{VERSION}.log"
@@ -266,10 +304,10 @@ class MainWindow(QMainWindow):
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(text)
-            self.log(f"[日志] 已导出到：{path}")
+            self.log(tr("[日志] 已导出到：{0}").format(path))
         except Exception as e:
             InfoBar.error(
-                "导出失败", str(e),
+                tr("导出失败"), str(e),
                 parent=self, position=InfoBarPosition.TOP,
             )
 
@@ -286,11 +324,11 @@ class MainWindow(QMainWindow):
 
         self.progress.setValue(0)
         self.pause_btn.setEnabled(True)
-        self.pause_btn.setText("暂停")
+        self.pause_btn.setText(tr("暂停"))
         self.stop_btn.setEnabled(True)
         if trigger_btn is not None:
             trigger_btn.setEnabled(False)
-        self.set_status("启动中…")
+        self.set_status(tr("启动中…"))
         worker.start()
 
     def _on_worker_finished(self, success: bool, summary: str):
@@ -298,7 +336,7 @@ class MainWindow(QMainWindow):
         self.stop_btn.setEnabled(False)
         if self._trigger_btn is not None:
             self._trigger_btn.setEnabled(True)
-        self.set_status("完成" if success else "结束（含失败）")
+        self.set_status(tr("完成") if success else tr("结束（含失败）"))
 
         out_dir = ""
         if self.current_worker:
@@ -308,21 +346,21 @@ class MainWindow(QMainWindow):
 
         if success:
             bar = InfoBar.new(
-                InfoBarIcon.SUCCESS, "处理完成", summary,
+                InfoBarIcon.SUCCESS, tr("处理完成"), summary,
                 Qt.Orientation.Horizontal,
                 isClosable=True, parent=self,
                 position=InfoBarPosition.TOP, duration=8000,
             )
         else:
             bar = InfoBar.new(
-                InfoBarIcon.WARNING, "处理结束", summary,
+                InfoBarIcon.WARNING, tr("处理结束"), summary,
                 Qt.Orientation.Horizontal,
                 isClosable=True, parent=self,
                 position=InfoBarPosition.TOP, duration=8000,
             )
 
         if has_dir:
-            open_btn = PushButton("打开文件夹", bar, FluentIcon.FOLDER)
+            open_btn = PushButton(tr("打开文件夹"), bar, FluentIcon.FOLDER)
             open_btn.setFixedHeight(30)
             open_btn.clicked.connect(
                 lambda *_, d=out_dir: os.startfile(d)  # noqa: S606
@@ -335,15 +373,15 @@ class MainWindow(QMainWindow):
         if not self.current_worker:
             return
         self.ctrl.paused = not self.ctrl.paused
-        self.pause_btn.setText("继续" if self.ctrl.paused else "暂停")
-        self.set_status("已暂停" if self.ctrl.paused else "运行中")
+        self.pause_btn.setText(tr("继续") if self.ctrl.paused else tr("暂停"))
+        self.set_status(tr("已暂停") if self.ctrl.paused else tr("运行中"))
 
     def _on_stop(self):
         if not self.current_worker:
             return
         self.ctrl.stopped = True
         self.ctrl.paused = False
-        self.set_status("正在停止…")
+        self.set_status(tr("正在停止…"))
 
     def closeEvent(self, event):
         if self.current_worker and self.current_worker.isRunning():

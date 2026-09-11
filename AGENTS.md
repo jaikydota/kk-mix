@@ -11,6 +11,7 @@
 - 打包：Cython → PyInstaller → `dist/kk_qt/`（内嵌 ffmpeg.exe + .pyd），脚本 `build_qt.cmd`
 - 依赖管理：`uv`（运行命令统一用 `uv run python ...`）
 - 版本号：唯一来源 `qt/core/paths.py` 的 `VERSION`，`pyproject.toml` 的 `version` 同步
+- 界面语言：中英双语，`qt/core/i18n.py` 的 `tr()`，中文为源语言，英文表在 `qt/core/translations_en.py`
 - 开源协议：MIT；Windows 平台
 
 ## 目录结构
@@ -37,6 +38,8 @@ kk-mix/
     │   ├── app_settings.py    # @dataclass AppSettings + JSON 持久化
     │   ├── batch_worker.py    # BatchControl + BatchWorker(QThread) 基类
     │   ├── tts_client.py      # Index-TTS 客户端（上传参考音 + 合成）
+    │   ├── i18n.py            # tr() / set_language / detect_system_language
+    │   ├── translations_en.py # 英文译文表 EN: {中文原文: 英文}
     │   ├── license.py         # LicenseDialog + check_license（无 .pyd 时开发模式放行）
     │   └── fonts.py           # list_system_fonts + wrap_title_text
     └── tabs/
@@ -46,6 +49,8 @@ kk-mix/
         ├── subtitle_concat.py # 字幕转场拼接（TTS 配音对齐）
         ├── split.py / pip.py / speed.py / rotate.py / watermark.py / volume.py
         ├── title.py / music.py / crop.py / compress.py / convert.py / extract.py
+├── tools/
+│   └── check_i18n.py          # i18n 覆盖率检查（未包装中文 / 缺译文 / 占位符不一致）
 ```
 
 ## 架构模式
@@ -78,7 +83,8 @@ kk_qt.py
    - 导入 <Name>Tab
    - 添加到 tabs 列表
 
-3. README.md 功能表加一行
+3. 英文译文补进 qt/core/translations_en.py，运行 uv run python tools/check_i18n.py
+4. README.md / README.zh-CN.md 功能表各加一行
 ```
 
 ## 关键约定
@@ -90,6 +96,9 @@ kk_qt.py
 - **FFmpeg 执行**：`self.run_cmd(cmd)` 统一入口（隐藏黑窗 + 详细日志 + 编码容错）
 - **输出目录**：Worker 必须设置 `self.output_dir`，完成后 InfoBar 可打开文件夹
 - **设置管理**：`AppSettings` dataclass，JSON 持久化，Worker 构造时拷贝快照
+- **i18n**：所有用户可见文本（控件、提示、日志）必须 `tr("中文")`；带变量用 `tr("…{0}…").format(x)`，禁止 f-string；
+  模块级/类级常量（TITLE、选项列表）保持中文、在使用处 `tr()`；按中文匹配数据的逻辑加 `# i18n: skip`；
+  提交前 `uv run python tools/check_i18n.py` 必须通过
 - **密钥/凭据**：任何 API key、服务地址、加密种子、密码都不得写进仓库文件；
   运行期配置走 `settings.json`（gitignore），编译期密钥走 `build_secrets.env` / 环境变量
 - **构建**：先 `uv run python setup_cython.py build_ext --inplace`，再 `build_qt.cmd`

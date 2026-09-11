@@ -1,6 +1,8 @@
 """批量添加水印。对应 kk.py 中的 create_watermark_tab / batch_watermark_operation / _watermark_video_ffmpeg。"""
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 from pathlib import Path
 
@@ -38,42 +40,42 @@ class WatermarkWorker(BatchWorker):
 
     def run_batch(self) -> tuple[bool, str]:
         if not os.path.isfile(self.watermark_image):
-            self.log("✗ 水印图片不存在")
-            return False, "水印图片不存在"
+            self.log(tr("✗ 水印图片不存在"))
+            return False, tr("水印图片不存在")
         ensure_dir(self.output_folder)
 
         files = list_media(self.video_folder, VIDEO_EXTS)
         if not files:
-            self.log("✗ 文件夹中没有视频文件")
-            return False, "无视频文件"
+            self.log(tr("✗ 文件夹中没有视频文件"))
+            return False, tr("无视频文件")
 
         bar = "=" * 60
-        self.log(f"\n{bar}\n开始批量添加水印   视频数: {len(files)}")
-        self.log(f"位置: {self.position}   透明度: {self.opacity}   缩放: {self.scale}")
+        self.log(tr('\n{0}\n开始批量添加水印   视频数: {1}').format(bar, len(files)))
+        self.log(tr("位置: {0}   透明度: {1}   缩放: {2}").format(self.position, self.opacity, self.scale))
         self.log(bar)
 
         success = 0
         for idx, name in enumerate(files, 1):
             if self.ctrl.wait_if_paused():
-                self.log("已手动停止"); break
+                self.log(tr("已手动停止")); break
 
             in_path = os.path.join(self.video_folder, name)
             out_name = f"watermark_{idx:03d}_{Path(name).stem}.mp4"
             out_path = os.path.join(self.output_folder, out_name)
 
-            self.log(f"\n[{idx}/{len(files)}] 处理: {name}")
+            self.log(tr('\n[{0}/{1}] 处理: {2}').format(idx, len(files), name))
             if self._watermark_ffmpeg(in_path, out_path):
                 success += 1
                 size_mb = os.path.getsize(out_path) / 1024 / 1024
-                self.log(f"  ✓ 成功: {out_name} ({size_mb:.1f} MB)")
+                self.log(tr("  ✓ 成功: {0} ({1:.1f} MB)").format(out_name, size_mb))
             else:
-                self.log(f"  ✗ 失败: {name}")
+                self.log(tr("  ✗ 失败: {0}").format(name))
 
             self.set_progress(idx / len(files) * 100)
-            self.set_status(f"添加水印中 {idx}/{len(files)}")
+            self.set_status(tr("添加水印中 {0}/{1}").format(idx, len(files)))
 
-        self.log(f"\n{bar}\n完成！成功处理 {success}/{len(files)} 个视频\n{bar}")
-        return success > 0, f"成功 {success}/{len(files)}"
+        self.log(tr('\n{0}\n完成！成功处理 {1}/{2} 个视频\n{3}').format(bar, success, len(files), bar))
+        return success > 0, tr("成功 {0}/{1}").format(success, len(files))
 
     def _watermark_ffmpeg(self, in_path: str, out_path: str) -> bool:
         try:
@@ -132,7 +134,7 @@ class WatermarkWorker(BatchWorker):
                 self.log(f"    stderr: {tail.strip()}")
             return False
         except Exception as e:
-            self.log(f"  ✗ 异常: {e}")
+            self.log(tr("  ✗ 异常: {0}").format(e))
             return False
 
 
@@ -143,36 +145,36 @@ class WatermarkTab(BaseTab):
 
     def build_form(self):
         self.video_folder = LineEdit(self)
-        self._add_folder_row(0, "视频文件夹", self.video_folder)
+        self._add_folder_row(0, tr("视频文件夹"), self.video_folder)
 
         self.watermark_image = LineEdit(self)
         self._add_file_row(
-            1, "水印图片", self.watermark_image,
-            file_filter="图片 (*.png *.jpg *.jpeg *.webp)",
-            placeholder="选择水印图片（推荐 PNG 透明底）",
+            1, tr("水印图片"), self.watermark_image,
+            file_filter=tr("图片 (*.png *.jpg *.jpeg *.webp)"),
+            placeholder=tr("选择水印图片（推荐 PNG 透明底）"),
         )
 
         self.output_folder = LineEdit(self)
         self.output_folder.setText(
-            os.path.join(os.path.expanduser("~"), "Desktop", "视频输出")
+            os.path.join(os.path.expanduser("~"), "Desktop", tr("视频输出"))
         )
-        self._add_folder_row(2, "输出文件夹", self.output_folder, is_output=True)
+        self._add_folder_row(2, tr("输出文件夹"), self.output_folder, is_output=True)
 
         self.position = ComboBox(self)
         self._position_values = [v for v, _ in _POSITION_OPTIONS]
         for v, label in _POSITION_OPTIONS:
-            self.position.addItem(f"{label}  ({v})")
-        self._add_param_row(3, "水印位置", self.position)
+            self.position.addItem(f"{tr(label)}  ({v})")
+        self._add_param_row(3, tr("水印位置"), self.position)
 
         self.opacity = DoubleSpinBox(self)
         self.opacity.setRange(0.05, 1.0); self.opacity.setValue(0.8)
         self.opacity.setSingleStep(0.05); self.opacity.setDecimals(2)
-        self._add_param_row(4, "透明度", self.opacity, hint="0.1 - 1.0")
+        self._add_param_row(4, tr("透明度"), self.opacity, hint="0.1 - 1.0")
 
         self.scale = DoubleSpinBox(self)
         self.scale.setRange(0.02, 0.5); self.scale.setValue(0.2)
         self.scale.setSingleStep(0.01); self.scale.setDecimals(2)
-        self._add_param_row(5, "缩放比例", self.scale, hint="相对视频宽度的比例，0.05 - 0.5")
+        self._add_param_row(5, tr("缩放比例"), self.scale, hint=tr("相对视频宽度的比例，0.05 - 0.5"))
 
     def build_worker(self):
         video_folder = self.video_folder.text().strip()
@@ -182,14 +184,14 @@ class WatermarkTab(BaseTab):
         opacity = self.opacity.value()
         scale = self.scale.value()
 
-        if not self._require_folder(video_folder, "视频文件夹") \
-           or not self._require_folder(watermark_image, "水印图片") \
-           or not self._require_folder(output_folder, "输出文件夹") \
-           or not self._require_dir_exists(video_folder, "视频文件夹"):
+        if not self._require_folder(video_folder, tr("视频文件夹")) \
+           or not self._require_folder(watermark_image, tr("水印图片")) \
+           or not self._require_folder(output_folder, tr("输出文件夹")) \
+           or not self._require_dir_exists(video_folder, tr("视频文件夹")):
             return None
         if not os.path.isfile(watermark_image):
             from qfluentwidgets import InfoBar, InfoBarPosition
-            InfoBar.error("水印图片不存在", watermark_image,
+            InfoBar.error(tr("水印图片不存在"), watermark_image,
                           parent=self.main, position=InfoBarPosition.TOP)
             return None
 

@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 from pathlib import Path
 
@@ -38,36 +40,36 @@ class MergeWorker(BatchWorker):
         files1 = list_media(self.folder1, ALL_MEDIA_EXTS)
         files2 = list_media(self.folder2, ALL_MEDIA_EXTS)
         if not files1 or not files2:
-            self.log("✗ 至少有一个文件夹中没有找到媒体文件")
-            return False, "媒体文件不足"
+            self.log(tr("✗ 至少有一个文件夹中没有找到媒体文件"))
+            return False, tr("媒体文件不足")
 
         total = min(len(files1), len(files2))
         bar = "=" * 60
-        self.log(f"\n{bar}\n开始分屏合并：文件夹1 有 {len(files1)} 个，文件夹2 有 {len(files2)} 个\n{bar}")
+        self.log(tr('\n{0}\n开始分屏合并：文件夹1 有 {1} 个，文件夹2 有 {2} 个\n{3}').format(bar, len(files1), len(files2), bar))
 
         success = 0
         for idx, (n1, n2) in enumerate(zip(files1, files2), 1):
             if self.ctrl.wait_if_paused():
-                self.log("已手动停止"); break
+                self.log(tr("已手动停止")); break
 
             p1 = os.path.join(self.folder1, n1)
             p2 = os.path.join(self.folder2, n2)
             out_name = f"merge_{idx:03d}_{Path(n1).stem}_{Path(n2).stem}.mp4"
             out_path = os.path.join(self.output, out_name)
 
-            self.log(f"\n[{idx}/{total}] 处理: {n1} + {n2}")
+            self.log(tr('\n[{0}/{1}] 处理: {2} + {3}').format(idx, total, n1, n2))
             if self._merge_ffmpeg(p1, p2, out_path):
                 success += 1
                 size_mb = os.path.getsize(out_path) / 1024 / 1024
-                self.log(f"  ✓ 成功: {out_name} ({size_mb:.1f} MB)")
+                self.log(tr("  ✓ 成功: {0} ({1:.1f} MB)").format(out_name, size_mb))
             else:
-                self.log(f"  ✗ 失败")
+                self.log(tr("  ✗ 失败"))
 
             self.set_progress(idx / total * 100)
-            self.set_status(f"分屏合并中 {idx}/{total}")
+            self.set_status(tr("分屏合并中 {0}/{1}").format(idx, total))
 
-        self.log(f"\n{bar}\n完成！成功生成 {success}/{total} 个视频\n{bar}")
-        return success > 0, f"成功 {success}/{total}"
+        self.log(tr('\n{0}\n完成！成功生成 {1}/{2} 个视频\n{3}').format(bar, success, total, bar))
+        return success > 0, tr("成功 {0}/{1}").format(success, total)
 
     # ─── FFmpeg 核心 ───
     def _merge_ffmpeg(self, p1: str, p2: str, out_path: str) -> bool:
@@ -134,7 +136,7 @@ class MergeWorker(BatchWorker):
                 self.log(f"    stderr: {tail.strip()}")
             return False
         except Exception as e:
-            self.log(f"  ✗ 异常: {e}")
+            self.log(tr("  ✗ 异常: {0}").format(e))
             return False
 
 
@@ -145,21 +147,21 @@ class MergeTab(BaseTab):
 
     def build_form(self):
         self.folder1 = LineEdit(self)
-        self._add_folder_row(0, "文件夹 1（左）", self.folder1)
+        self._add_folder_row(0, tr("文件夹 1（左）"), self.folder1)
 
         self.folder2 = LineEdit(self)
-        self._add_folder_row(1, "文件夹 2（右）", self.folder2)
+        self._add_folder_row(1, tr("文件夹 2（右）"), self.folder2)
 
         self.output = LineEdit(self)
         self.output.setText(
-            os.path.join(os.path.expanduser("~"), "Desktop", "视频输出")
+            os.path.join(os.path.expanduser("~"), "Desktop", tr("视频输出"))
         )
-        self._add_folder_row(2, "输出文件夹", self.output, is_output=True)
+        self._add_folder_row(2, tr("输出文件夹"), self.output, is_output=True)
 
         # 音频源选择（3 个单选）
         self.audio_group = QButtonGroup(self)
         self._audio_source_values = ["folder1", "folder2", "none"]
-        audio_labels = ["使用文件夹 1 音频", "使用文件夹 2 音频", "无音频"]
+        audio_labels = [tr("使用文件夹 1 音频"), tr("使用文件夹 2 音频"), tr("无音频")]
         from PySide6.QtWidgets import QWidget, QHBoxLayout
         holder = QWidget(self)
         h = QHBoxLayout(holder)
@@ -172,14 +174,14 @@ class MergeTab(BaseTab):
             self.audio_group.addButton(rb, id=i)
             h.addWidget(rb)
         h.addStretch(1)
-        self._add_param_row(3, "音频源", holder)
+        self._add_param_row(3, tr("音频源"), holder)
 
         self.image_duration = SpinBox(self)
         self.image_duration.setRange(1, 60)
         self.image_duration.setValue(5)
-        self.image_duration.setSuffix(" 秒")
-        self._add_param_row(4, "图片显示时长", self.image_duration,
-                            hint="仅当某个输入是图片时生效")
+        self.image_duration.setSuffix(tr(" 秒"))
+        self._add_param_row(4, tr("图片显示时长"), self.image_duration,
+                            hint=tr("仅当某个输入是图片时生效"))
 
     def build_worker(self):
         f1 = self.folder1.text().strip()
@@ -188,11 +190,11 @@ class MergeTab(BaseTab):
         audio_source = self._audio_source_values[max(0, self.audio_group.checkedId())]
         image_duration = float(self.image_duration.value())
 
-        if not self._require_folder(f1, "文件夹 1") \
-           or not self._require_folder(f2, "文件夹 2") \
-           or not self._require_folder(out, "输出文件夹") \
-           or not self._require_dir_exists(f1, "文件夹 1") \
-           or not self._require_dir_exists(f2, "文件夹 2"):
+        if not self._require_folder(f1, tr("文件夹 1")) \
+           or not self._require_folder(f2, tr("文件夹 2")) \
+           or not self._require_folder(out, tr("输出文件夹")) \
+           or not self._require_dir_exists(f1, tr("文件夹 1")) \
+           or not self._require_dir_exists(f2, tr("文件夹 2")):
             return None
 
         return MergeWorker(

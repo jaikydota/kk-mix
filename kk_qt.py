@@ -12,7 +12,10 @@ from PySide6.QtWidgets import QApplication
 
 from qfluentwidgets import Theme, setTheme
 
+from qt.core import i18n
+from qt.core.app_settings import AppSettings
 from qt.core.license import check_license
+from qt.core.paths import settings_path
 from qt.main_window import MainWindow
 
 
@@ -23,7 +26,12 @@ def main():
     app = QApplication(sys.argv)
     setTheme(Theme.AUTO)
 
+    # 界面语言：settings.json 的 language，空则跟随系统区域
+    lang = AppSettings.load(settings_path()).language
+    i18n.set_language(lang or i18n.detect_system_language())
+
     window = MainWindow()
+    MainWindow._instance = window
 
     # parent=None 使授权对话框作为独立顶层窗口，在任务栏显示图标
     if not check_license():

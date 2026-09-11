@@ -1,6 +1,8 @@
 """批量分割视频。对应 kk.py 中的 create_split_tab / batch_split_operation / split_video_ffmpeg。"""
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 from pathlib import Path
 
@@ -34,45 +36,45 @@ class SplitWorker(BatchWorker):
 
         files = list_media(self.folder, VIDEO_EXTS)
         if not files:
-            self.log("✗ 文件夹中没有视频文件")
-            return False, "无视频文件"
+            self.log(tr("✗ 文件夹中没有视频文件"))
+            return False, tr("无视频文件")
 
         bar = "=" * 60
-        self.log(f"\n{bar}\n开始批量分割   视频数: {len(files)}   片段时长: {self.duration} 秒\n{bar}")
+        self.log(tr('\n{0}\n开始批量分割   视频数: {1}   片段时长: {2} 秒\n{3}').format(bar, len(files), self.duration, bar))
 
         total_segments = 0
         for idx, name in enumerate(files, 1):
             if self.ctrl.wait_if_paused():
-                self.log("已手动停止"); break
+                self.log(tr("已手动停止")); break
 
             video_path = os.path.join(self.folder, name)
             count = self._split_one(video_path)
             total_segments += count
 
             self.set_progress(idx / len(files) * 100)
-            self.set_status(f"分割中 {idx}/{len(files)}")
+            self.set_status(tr("分割中 {0}/{1}").format(idx, len(files)))
 
-        self.log(f"\n{bar}\n完成！总计 {total_segments} 片段\n{bar}")
-        return total_segments > 0, f"{total_segments} 片段"
+        self.log(tr('\n{0}\n完成！总计 {1} 片段\n{2}').format(bar, total_segments, bar))
+        return total_segments > 0, tr("{0} 片段").format(total_segments)
 
     def _split_one(self, video_path: str) -> int:
         stem = Path(video_path).stem
-        self.log(f"\n=== 处理: {stem} ===")
+        self.log(tr('\n=== 处理: {0} ===').format(stem))
 
         if not os.path.exists(video_path):
-            self.log(f"✗ 文件不存在: {video_path}")
+            self.log(tr("✗ 文件不存在: {0}").format(video_path))
             return 0
 
         total_duration = probe_duration(self.ffmpeg_path, video_path)
         if total_duration <= 0:
-            self.log("  ✗ 无法读取时长，跳过")
+            self.log(tr("  ✗ 无法读取时长，跳过"))
             return 0
 
         if total_duration < self.duration:
             if self.keep_remainder:
                 num_segments = 1
             else:
-                self.log("  时长不足，跳过")
+                self.log(tr("  时长不足，跳过"))
                 return 0
         else:
             num_segments = int(total_duration // self.duration)
@@ -80,7 +82,7 @@ class SplitWorker(BatchWorker):
             if self.keep_remainder and remainder > 0.5:
                 num_segments += 1
 
-        self.log(f"  将分割为 {num_segments} 个片段")
+        self.log(tr("  将分割为 {0} 个片段").format(num_segments))
 
         produced = 0
         for i in range(num_segments):
@@ -93,7 +95,7 @@ class SplitWorker(BatchWorker):
 
             out_name = f"{stem}_part{i+1:03d}.mp4"
             out_path = os.path.join(self.output, out_name)
-            self.log(f"  片段 {i+1}/{num_segments}: {start:.1f}-{end:.1f}s ({seg_duration:.1f}s)")
+            self.log(tr("  片段 {0}/{1}: {2:.1f}-{3:.1f}s ({4:.1f}s)").format(i + 1, num_segments, start, end, seg_duration))
 
             if self._split_ffmpeg(video_path, out_path, start, seg_duration):
                 produced += 1
@@ -130,7 +132,7 @@ class SplitWorker(BatchWorker):
                 self.log(f"    stderr: {tail.strip()}")
             return False
         except Exception as e:
-            self.log(f"    ✗ 异常: {e}")
+            self.log(tr("    ✗ 异常: {0}").format(e))
             return False
 
     def _extract_audio(self, in_path: str, out_path: str, start: float, seg_duration: float) -> bool:
@@ -159,31 +161,31 @@ class SplitTab(BaseTab):
 
     def build_form(self):
         self.video_folder = LineEdit(self)
-        self._add_folder_row(0, "视频文件夹", self.video_folder)
+        self._add_folder_row(0, tr("视频文件夹"), self.video_folder)
 
         self.output_folder = LineEdit(self)
         self.output_folder.setText(
-            os.path.join(os.path.expanduser("~"), "Desktop", "视频输出")
+            os.path.join(os.path.expanduser("~"), "Desktop", tr("视频输出"))
         )
-        self._add_folder_row(1, "视频输出文件夹", self.output_folder, is_output=True)
+        self._add_folder_row(1, tr("视频输出文件夹"), self.output_folder, is_output=True)
 
         self.audio_folder = LineEdit(self)
-        self._add_folder_row(2, "音频输出文件夹", self.audio_folder, is_output=True)
+        self._add_folder_row(2, tr("音频输出文件夹"), self.audio_folder, is_output=True)
 
         self.duration = DoubleSpinBox(self)
         self.duration.setRange(1.0, 3600.0)
         self.duration.setValue(10.0)
         self.duration.setSingleStep(1.0)
         self.duration.setDecimals(1)
-        self.duration.setSuffix(" 秒")
-        self._add_param_row(3, "片段时长", self.duration)
+        self.duration.setSuffix(tr(" 秒"))
+        self._add_param_row(3, tr("片段时长"), self.duration)
 
-        self.extract_audio = CheckBox("同时提取 MP3 音频", self)
-        self._add_param_row(4, "提取音频", self.extract_audio)
+        self.extract_audio = CheckBox(tr("同时提取 MP3 音频"), self)
+        self._add_param_row(4, tr("提取音频"), self.extract_audio)
 
-        self.keep_remainder = CheckBox("保留末尾不足片段", self)
+        self.keep_remainder = CheckBox(tr("保留末尾不足片段"), self)
         self.keep_remainder.setChecked(True)
-        self._add_param_row(5, "余数片段", self.keep_remainder)
+        self._add_param_row(5, tr("余数片段"), self.keep_remainder)
 
     def build_worker(self):
         folder = self.video_folder.text().strip()
@@ -193,11 +195,11 @@ class SplitTab(BaseTab):
         extract = self.extract_audio.isChecked()
         keep = self.keep_remainder.isChecked()
 
-        if not self._require_folder(folder, "视频文件夹") \
-           or not self._require_folder(output, "视频输出文件夹") \
-           or not self._require_dir_exists(folder, "视频文件夹"):
+        if not self._require_folder(folder, tr("视频文件夹")) \
+           or not self._require_folder(output, tr("视频输出文件夹")) \
+           or not self._require_dir_exists(folder, tr("视频文件夹")):
             return None
-        if extract and not self._require_folder(audio_output, "音频输出文件夹"):
+        if extract and not self._require_folder(audio_output, tr("音频输出文件夹")):
             return None
 
         return SplitWorker(

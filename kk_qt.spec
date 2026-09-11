@@ -42,6 +42,7 @@ a = Analysis(
         'PySide6.QtSvg',
         'PySide6.QtSvgWidgets',
         'qfluentwidgets',
+        'qt.core.translations_en',   # i18n 译文表为函数内延迟导入，显式声明保险
     ],
     hookspath=[],
     hooksconfig={},

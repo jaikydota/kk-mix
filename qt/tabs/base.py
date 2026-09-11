@@ -1,11 +1,13 @@
 """所有功能 Tab 的基类。
 
 约定：
-  - NAME / TITLE / ICON 为类属性，被 MainWindow 注册时读取
+  - NAME / TITLE / ICON 为类属性，被 MainWindow 注册时读取；TITLE 保持中文，显示时 tr()
   - build_form()   子类实现，往 self.form_layout 填控件
   - build_worker() 子类实现，校验参数并返回 BatchWorker；非法时返回 None 并弹提示
 """
 from __future__ import annotations
+
+from qt.core.i18n import tr
 
 import os
 from typing import TYPE_CHECKING
@@ -54,7 +56,7 @@ class BaseTab(QWidget):
         outer.setContentsMargins(28, 24, 28, 20)
         outer.setSpacing(18)
 
-        header = StrongBodyLabel(self.TITLE, self)
+        header = StrongBodyLabel(tr(self.TITLE), self)
         header.setStyleSheet("font-size: 22px; font-weight: 600;")
         outer.addWidget(header)
 
@@ -66,7 +68,7 @@ class BaseTab(QWidget):
         self.build_form()
         outer.addWidget(self.form_card)
 
-        self.start_btn = PrimaryPushButton("开始批量处理", self, FluentIcon.PLAY)
+        self.start_btn = PrimaryPushButton(tr("开始批量处理"), self, FluentIcon.PLAY)
         self.start_btn.setFixedHeight(42)
         self.start_btn.clicked.connect(self._on_start)
         outer.addWidget(self.start_btn)
@@ -84,8 +86,8 @@ class BaseTab(QWidget):
     def _on_start(self):
         if self.main.current_worker and self.main.current_worker.isRunning():
             InfoBar.warning(
-                "有任务进行中",
-                "请等待当前任务结束或点击停止。",
+                tr("有任务进行中"),
+                tr("请等待当前任务结束或点击停止。"),
                 parent=self.main,
                 position=InfoBarPosition.TOP,
             )
@@ -109,7 +111,7 @@ class BaseTab(QWidget):
             line_edit.setPlaceholderText(placeholder)
         self.form_layout.addWidget(BodyLabel(label, self), row, 0)
         self.form_layout.addWidget(line_edit, row, 1)
-        btn = PushButton("浏览", self, FluentIcon.FOLDER)
+        btn = PushButton(tr("浏览"), self, FluentIcon.FOLDER)
         btn.clicked.connect(lambda: self._browse_folder(line_edit, is_output))
         self.form_layout.addWidget(btn, row, 2)
         self.form_layout.setColumnStretch(1, 1)
@@ -127,7 +129,7 @@ class BaseTab(QWidget):
             line_edit.setPlaceholderText(placeholder)
         self.form_layout.addWidget(BodyLabel(label, self), row, 0)
         self.form_layout.addWidget(line_edit, row, 1)
-        btn = PushButton("浏览", self, FluentIcon.DOCUMENT)
+        btn = PushButton(tr("浏览"), self, FluentIcon.DOCUMENT)
         btn.clicked.connect(lambda: self._browse_file(line_edit, file_filter))
         self.form_layout.addWidget(btn, row, 2)
         self.form_layout.setColumnStretch(1, 1)
@@ -155,7 +157,7 @@ class BaseTab(QWidget):
         self.form_layout.addWidget(holder, row, 1, 1, 2)
 
     def _browse_folder(self, line_edit: LineEdit, is_output: bool):
-        title = "选择输出文件夹" if is_output else "选择文件夹"
+        title = tr("选择输出文件夹") if is_output else tr("选择文件夹")
         start = line_edit.text() or os.path.expanduser("~")
         folder = QFileDialog.getExistingDirectory(self, title, start)
         if folder:
@@ -163,7 +165,7 @@ class BaseTab(QWidget):
 
     def _browse_file(self, line_edit: LineEdit, file_filter: str):
         start = line_edit.text() or os.path.expanduser("~")
-        path, _ = QFileDialog.getOpenFileName(self, "选择文件", start, file_filter)
+        path, _ = QFileDialog.getOpenFileName(self, tr("选择文件"), start, file_filter)
         if path:
             line_edit.setText(path.replace("/", os.sep))
 
@@ -171,8 +173,8 @@ class BaseTab(QWidget):
     def _require_folder(self, path: str, label: str) -> bool:
         if not path:
             InfoBar.warning(
-                "参数不完整",
-                f"请选择{label}",
+                tr("参数不完整"),
+                tr("请选择{0}").format(label),
                 parent=self.main,
                 position=InfoBarPosition.TOP,
             )
@@ -182,8 +184,8 @@ class BaseTab(QWidget):
     def _require_dir_exists(self, path: str, label: str) -> bool:
         if not os.path.isdir(path):
             InfoBar.error(
-                "路径无效",
-                f"{label}不存在：{path}",
+                tr("路径无效"),
+                tr("{0}不存在：{1}").format(label, path),
                 parent=self.main,
                 position=InfoBarPosition.TOP,
             )

@@ -89,6 +89,10 @@ When run from source there is **no compiled license module**, so the app automat
 
 > The app still launches without FFmpeg, but a persistent red "FFmpeg not found" banner appears and no processing feature will run.
 
+### Language
+
+The UI is available in **English** and **Simplified Chinese**. On first launch it follows your system locale; click **简体中文 / English** at the bottom of the left navigation bar to switch at any time — the window is rebuilt instantly and the log is preserved. The choice is saved as `language` in `settings.json`.
+
 ### Configuration
 
 Global settings live in `settings.json` next to the program (editable in-app via **Global Settings**). A template is provided:
@@ -99,6 +103,7 @@ cp settings.example.json settings.json
 
 | Field | Meaning |
 |---|---|
+| `language` | UI language: `"en"`, `"zh"`, or `""` to follow the system locale |
 | `tts_base_url` / `tts_api_key` | Index-TTS endpoint and api-key; only needed by *Narrated concat* |
 | `verbose_log` | Print the full ffmpeg command line and stderr |
 | `speed_priority` | `true` uses the `ultrafast` preset, `false` uses `medium` |
@@ -183,8 +188,11 @@ kk-mix/
     │   ├── paths.py         # Version, extension sets, resource paths
     │   ├── fonts.py         # System font enumeration, title auto-wrap
     │   ├── tts_client.py    # Index-TTS client
+    │   ├── i18n.py          # tr() + language switching
+    │   ├── translations_en.py # English strings (keyed by the Chinese source text)
     │   └── license.py       # License dialog
-    └── tabs/                # One file per feature, all subclassing BaseTab
+    ├── tabs/                # One file per feature, all subclassing BaseTab
+    └── tools/check_i18n.py  # i18n coverage check
 ```
 
 ### Adding a feature page
@@ -193,6 +201,7 @@ kk-mix/
    - `class <Name>Worker(BatchWorker)` — implement `run_batch() -> (success, summary)`, call `self.ctrl.wait_if_paused()` inside the loop, run FFmpeg via `self.run_cmd(cmd)`, and set `self.output_dir`.
    - `class <Name>Tab(BaseTab)` — define `NAME / TITLE / ICON`, implement `build_form()` (add widgets to `self.form_layout`) and `build_worker()` (validate input, return the worker).
 2. Append `<Name>Tab(self)` to the list in `_register_tabs()` in `qt/main_window.py`.
+3. Write every user-visible string as `tr("中文")` (Chinese is the source language; use `tr("…{0}…").format(x)` instead of f-strings), add the English text to `qt/core/translations_en.py`, and run `uv run python tools/check_i18n.py` — it fails on any unwrapped or untranslated string.
 
 More conventions in [AGENTS.md](AGENTS.md).
 

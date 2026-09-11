@@ -10,6 +10,8 @@
 """
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 import shutil
 
@@ -60,12 +62,12 @@ class SubtitleConcatWorker(BatchWorker):
 
         min_count = min((len(v) for v in all_videos), default=0)
         if min_count == 0:
-            self.log("✗ 有文件夹中没有视频文件")
-            return False, "无视频文件"
+            self.log(tr("✗ 有文件夹中没有视频文件"))
+            return False, tr("无视频文件")
 
         n = len(self.folders)
         bar = "=" * 60
-        self.log(f"\n{bar}\n开始批量字幕转场拼接   文件夹数: {n}   每组视频数: {min_count}\n{bar}")
+        self.log(tr('\n{0}\n开始批量字幕转场拼接   文件夹数: {1}   每组视频数: {2}\n{3}').format(bar, n, min_count, bar))
 
         temp_dir = os.path.join(self.output, "_subconcat_temp")
         ensure_dir(temp_dir)
@@ -78,7 +80,7 @@ class SubtitleConcatWorker(BatchWorker):
         try:
             # 1) 参考音 + 逐文件夹逐行合成配音（整批共用，同一 seed 保证音色一致）
             tts = TTSClient(self.settings.tts_base_url, self.settings.tts_api_key)
-            self.set_status("上传参考音…")
+            self.set_status(tr("上传参考音…"))
             self.log(tts.ensure_reference())
 
             speech_files: list[list[str]] = []
@@ -87,30 +89,28 @@ class SubtitleConcatWorker(BatchWorker):
             for j, lines in enumerate(self.texts):
                 used = used_counts[j]
                 if len(lines) > used:
-                    self.log(f"文件夹 {j+1}: 文字 {len(lines)} 行 > 视频 {min_count} 个，"
-                             f"仅前 {used} 行会用到")
+                    self.log(tr("文件夹 {0}: 文字 {1} 行 > 视频 {2} 个，仅前 {3} 行会用到").format(j + 1, len(lines), min_count, used))
                 elif used < min_count:
-                    self.log(f"文件夹 {j+1}: 文字 {used} 行 < 视频 {min_count} 个，循环使用")
+                    self.log(tr("文件夹 {0}: 文字 {1} 行 < 视频 {2} 个，循环使用").format(j + 1, used, min_count))
                 folder_files: list[str] = []
                 folder_durs: list[float] = []
                 for k in range(used):
                     if self.ctrl.wait_if_paused():
-                        self.log("已手动停止")
-                        return False, "已停止"
+                        self.log(tr("已手动停止"))
+                        return False, tr("已停止")
                     done += 1
-                    self.set_status(f"合成语音 {done}/{total_tts}")
+                    self.set_status(tr("合成语音 {0}/{1}").format(done, total_tts))
                     text = lines[k]
-                    self.log(f"[TTS {done}/{total_tts}] 文件夹{j+1} 第{k+1}行: "
-                             f"{text[:40]}{'…' if len(text) > 40 else ''}")
+                    self.log(tr("[TTS {0}/{1}] 文件夹{2} 第{3}行: {4}{5}").format(done, total_tts, j + 1, k + 1, text[:40], '…' if len(text) > 40 else ''))
                     wav = os.path.join(temp_dir, f"speech_{j:02d}_{k:03d}.wav")
                     tts.synthesize(text, wav)
                     d = probe_duration(self.ffmpeg_path, wav)
                     if d <= 0:
-                        self.log("✗ 无法获取语音时长")
-                        return False, "TTS 失败"
+                        self.log(tr("✗ 无法获取语音时长"))
+                        return False, tr("TTS 失败")
                     folder_files.append(wav)
                     folder_durs.append(d)
-                    self.log(f"  ✓ 语音时长 {d:.2f}s")
+                    self.log(tr("  ✓ 语音时长 {0:.2f}s").format(d))
                     self.set_progress(done / total_steps * 100)
                 speech_files.append(folder_files)
                 speech_durs.append(folder_durs)
@@ -120,23 +120,22 @@ class SubtitleConcatWorker(BatchWorker):
                 min_speech = min(d for durs in speech_durs for d in durs)
                 if self.td >= min_speech:
                     self.td = round(min_speech * 0.4, 3)
-                    self.log(f"⚠ 转场时长超过最短语音，自动调整为 {self.td:.2f}s")
-                self.log(f"转场 {self.td:.2f}s：各片段尾部延长 {self.td:.2f}s 画面用于转场重叠，"
-                         "配音顺序直连、不做淡入淡出")
+                    self.log(tr("⚠ 转场时长超过最短语音，自动调整为 {0:.2f}s").format(self.td))
+                self.log(tr("转场 {0:.2f}s：各片段尾部延长 {1:.2f}s 画面用于转场重叠，配音顺序直连、不做淡入淡出").format(self.td, self.td))
 
             # 2) 逐组：片段对齐配音时长（末段外加转场余量）→ 视频转场 + 配音直连
             for i in range(min_count):
                 if self.ctrl.wait_if_paused():
-                    self.log("已手动停止")
+                    self.log(tr("已手动停止"))
                     break
 
                 group = [os.path.join(self.folders[j], all_videos[j][i]) for j in range(n)]
                 out_name = f"sub_concat_{i+1:03d}.mp4"
                 out_path = os.path.join(self.output, out_name)
 
-                self.log(f"\n[{i+1}/{min_count}] 生成 {len(group)} 个配音片段并拼接")
+                self.log(tr('\n[{0}/{1}] 生成 {2} 个配音片段并拼接').format(i + 1, min_count, len(group)))
                 ref_w, ref_h, ref_fps = probe_resolution_fps(self.ffmpeg_path, group[0])
-                self.log(f"    基准分辨率: {ref_w}x{ref_h}，帧率: {ref_fps}fps")
+                self.log(tr("    基准分辨率: {0}x{1}，帧率: {2}fps").format(ref_w, ref_h, ref_fps))
 
                 segments: list[str] = []
                 group_speeches: list[str] = []
@@ -146,10 +145,10 @@ class SubtitleConcatWorker(BatchWorker):
                     group_speeches.append(speech_files[j][k])
                     pad = self.td if (self.td > 0 and j < n - 1) else 0.0
                     seg = os.path.join(temp_dir, f"seg_{i:03d}_{j:02d}.mp4")
-                    self.log(f"    片段 {j+1} ← 第 {k+1} 行文字（语音 {speech_durs[j][k]:.2f}s）")
+                    self.log(tr("    片段 {0} ← 第 {1} 行文字（语音 {2:.2f}s）").format(j + 1, k + 1, speech_durs[j][k]))
                     if not self._build_segment(src, speech_durs[j][k] + pad,
                                                ref_w, ref_h, ref_fps, seg):
-                        self.log(f"    ✗ 片段生成失败: {os.path.basename(src)}")
+                        self.log(tr("    ✗ 片段生成失败: {0}").format(os.path.basename(src)))
                         ok_all = False
                         break
                     segments.append(seg)
@@ -157,9 +156,9 @@ class SubtitleConcatWorker(BatchWorker):
                 if ok_all and self._concat_segments(segments, group_speeches, out_path):
                     success += 1
                     size_mb = os.path.getsize(out_path) / 1024 / 1024
-                    self.log(f"  ✓ 成功: {out_name} ({size_mb:.1f} MB)")
+                    self.log(tr("  ✓ 成功: {0} ({1:.1f} MB)").format(out_name, size_mb))
                 else:
-                    self.log("  ✗ 失败")
+                    self.log(tr("  ✗ 失败"))
 
                 for seg in segments:
                     try:
@@ -168,17 +167,17 @@ class SubtitleConcatWorker(BatchWorker):
                         pass
 
                 self.set_progress((n + i + 1) / total_steps * 100)
-                self.set_status(f"字幕转场拼接中 {i+1}/{min_count}")
+                self.set_status(tr("字幕转场拼接中 {0}/{1}").format(i + 1, min_count))
         except TTSError as e:
             self.log(f"✗ {e}")
-            return False, "TTS 失败"
+            return False, tr("TTS 失败")
         finally:
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
-                self.log("  临时文件夹已清理")
+                self.log(tr("  临时文件夹已清理"))
 
-        self.log(f"\n{bar}\n完成！成功生成 {success}/{min_count} 个视频\n{bar}")
-        return success > 0, f"成功 {success}/{min_count}"
+        self.log(tr('\n{0}\n完成！成功生成 {1}/{2} 个视频\n{3}').format(bar, success, min_count, bar))
+        return success > 0, tr("成功 {0}/{1}").format(success, min_count)
 
     # ─── 片段与配音对齐（纯视频，无音轨） ───
     def _build_segment(self, video: str, dur: float,
@@ -186,12 +185,12 @@ class SubtitleConcatWorker(BatchWorker):
         """把 video 循环/裁剪到 dur 秒并归一化到 w×h/fps，丢弃原音轨。"""
         src_dur = probe_duration(self.ffmpeg_path, video)
         if src_dur <= 0:
-            self.log(f"    ✗ 无法获取时长: {os.path.basename(video)}")
+            self.log(tr("    ✗ 无法获取时长: {0}").format(os.path.basename(video)))
             return False
         if src_dur < dur:
-            self.log(f"    片段 {src_dur:.2f}s < 目标 {dur:.2f}s，循环补足")
+            self.log(tr("    片段 {0:.2f}s < 目标 {1:.2f}s，循环补足").format(src_dur, dur))
         else:
-            self.log(f"    片段 {src_dur:.2f}s ≥ 目标 {dur:.2f}s，裁剪对齐")
+            self.log(tr("    片段 {0:.2f}s ≥ 目标 {1:.2f}s，裁剪对齐").format(src_dur, dur))
 
         vf = (f"scale={w}:{h}:force_original_aspect_ratio=increase,"
               f"crop={w}:{h},setsar=1")
@@ -245,7 +244,7 @@ class SubtitleConcatWorker(BatchWorker):
                 for v in videos:
                     d = probe_duration(self.ffmpeg_path, v)
                     if d <= 0:
-                        self.log(f"    ✗ 无法获取时长: {os.path.basename(v)}")
+                        self.log(tr("    ✗ 无法获取时长: {0}").format(os.path.basename(v)))
                         return False
                     durations.append(d)
 
@@ -279,7 +278,7 @@ class SubtitleConcatWorker(BatchWorker):
                 self.log(f"    stderr: {tail.strip()}")
             return False
         except Exception as e:
-            self.log(f"  ✗ 异常: {e}")
+            self.log(tr("  ✗ 异常: {0}").format(e))
             return False
 
 
@@ -290,7 +289,7 @@ class SubtitleConcatTab(BaseTab):
 
     def build_form(self):
         self.form_layout.addWidget(
-            StrongBodyLabel("视频文件夹（按顺序拼接，每个文件夹配一段配音文字）", self), 0, 0, 1, 3)
+            StrongBodyLabel(tr("视频文件夹（按顺序拼接，每个文件夹配一段配音文字）"), self), 0, 0, 1, 3)
 
         self.rows: list[dict] = []
         list_holder = QFrame(self)
@@ -315,10 +314,10 @@ class SubtitleConcatTab(BaseTab):
 
         action_bar = QHBoxLayout()
         action_bar.setSpacing(10)
-        add_btn = PushButton("＋ 添加文件夹", self, FluentIcon.ADD)
+        add_btn = PushButton(tr("＋ 添加文件夹"), self, FluentIcon.ADD)
         add_btn.clicked.connect(self._add_row)
         action_bar.addWidget(add_btn)
-        hint = BodyLabel(f"可无限添加，至少保留 {_MIN_FIXED_ROWS} 个；留空的文件夹行自动跳过", self)
+        hint = BodyLabel(tr("可无限添加，至少保留 {0} 个；留空的文件夹行自动跳过").format(_MIN_FIXED_ROWS), self)
         hint.setStyleSheet("color: #8a8a8a;")
         action_bar.addWidget(hint)
         action_bar.addStretch(1)
@@ -332,9 +331,9 @@ class SubtitleConcatTab(BaseTab):
         # 输出文件夹
         self.output = LineEdit(self)
         self.output.setText(
-            os.path.join(os.path.expanduser("~"), "Desktop", "视频输出")
+            os.path.join(os.path.expanduser("~"), "Desktop", tr("视频输出"))
         )
-        self._add_folder_row(2, "输出文件夹", self.output, is_output=True)
+        self._add_folder_row(2, tr("输出文件夹"), self.output, is_output=True)
 
         # 转场时长
         self.td = DoubleSpinBox(self)
@@ -342,15 +341,15 @@ class SubtitleConcatTab(BaseTab):
         self.td.setValue(0.5)
         self.td.setSingleStep(0.1)
         self.td.setDecimals(2)
-        self.td.setSuffix(" 秒")
-        self._add_param_row(3, "转场时长", self.td, hint="0 = 无转场，直接拼接")
+        self.td.setSuffix(tr(" 秒"))
+        self._add_param_row(3, tr("转场时长"), self.td, hint=tr("0 = 无转场，直接拼接"))
 
         # 转场类型
         self.transition = ComboBox(self)
         for label, _ in _TRANSITIONS:
-            self.transition.addItem(label)
+            self.transition.addItem(tr(label))
         self.transition.setCurrentIndex(0)
-        self._add_param_row(4, "转场类型", self.transition)
+        self._add_param_row(4, tr("转场类型"), self.transition)
 
     # ─── 动态行 ───
     def _add_row(self):
@@ -362,11 +361,11 @@ class SubtitleConcatTab(BaseTab):
 
         top = QHBoxLayout()
         top.setSpacing(8)
-        label = BodyLabel(f"文件夹 {idx + 1}", row_widget)
+        label = BodyLabel(tr("文件夹 {0}").format(idx + 1), row_widget)
         label.setMinimumWidth(70)
         line_edit = LineEdit(row_widget)
-        line_edit.setPlaceholderText("选择要拼接的视频所在文件夹")
-        browse_btn = PushButton("浏览", row_widget, FluentIcon.FOLDER)
+        line_edit.setPlaceholderText(tr("选择要拼接的视频所在文件夹"))
+        browse_btn = PushButton(tr("浏览"), row_widget, FluentIcon.FOLDER)
         browse_btn.clicked.connect(lambda _=False, le=line_edit: self._browse_folder(le, False))
         remove_btn = PushButton("✕", row_widget)
         remove_btn.setFixedWidth(36)
@@ -379,12 +378,12 @@ class SubtitleConcatTab(BaseTab):
 
         bottom = QHBoxLayout()
         bottom.setSpacing(8)
-        text_label = BodyLabel("配音文字", row_widget)
+        text_label = BodyLabel(tr("配音文字"), row_widget)
         text_label.setMinimumWidth(70)
         text_label.setAlignment(Qt.AlignmentFlag.AlignTop)
         text_edit = PlainTextEdit(row_widget)
         text_edit.setPlaceholderText(
-            "每行文字对应该文件夹的一个视频（TTS 转语音）；行数不足时循环使用")
+            tr("每行文字对应该文件夹的一个视频（TTS 转语音）；行数不足时循环使用"))
         text_edit.setFixedHeight(74)
         bottom.addWidget(text_label)
         bottom.addWidget(text_edit, 1)
@@ -404,8 +403,8 @@ class SubtitleConcatTab(BaseTab):
         if idx < _MIN_FIXED_ROWS:
             from qfluentwidgets import InfoBar, InfoBarPosition
             InfoBar.warning(
-                "不能移除",
-                f"前 {_MIN_FIXED_ROWS} 个文件夹不能删除",
+                tr("不能移除"),
+                tr("前 {0} 个文件夹不能删除").format(_MIN_FIXED_ROWS),
                 parent=self.main, position=InfoBarPosition.TOP,
             )
             return
@@ -417,7 +416,7 @@ class SubtitleConcatTab(BaseTab):
 
     def _refresh_rows(self):
         for i, row in enumerate(self.rows):
-            row["label"].setText(f"文件夹 {i + 1}")
+            row["label"].setText(tr("文件夹 {0}").format(i + 1))
             row["remove_btn"].setVisible(i >= _MIN_FIXED_ROWS)
 
     # ─── 构建 worker ───
@@ -426,7 +425,7 @@ class SubtitleConcatTab(BaseTab):
 
         s = self.main.settings
         if not s.tts_base_url.strip() or not s.tts_api_key.strip():
-            InfoBar.warning("TTS 未配置", "请先在「全局设置」中填写 TTS 服务地址和 API Key",
+            InfoBar.warning(tr("TTS 未配置"), tr("请先在「全局设置」中填写 TTS 服务地址和 API Key"),
                             parent=self.main, position=InfoBarPosition.TOP)
             return None
 
@@ -439,22 +438,22 @@ class SubtitleConcatTab(BaseTab):
             if not folder:
                 continue
             if not lines:
-                InfoBar.warning("参数不完整", f"文件夹 {i + 1} 未填写配音文字",
+                InfoBar.warning(tr("参数不完整"), tr("文件夹 {0} 未填写配音文字").format(i + 1),
                                 parent=self.main, position=InfoBarPosition.TOP)
                 return None
             folders.append(folder)
             texts.append(lines)
 
         if not folders:
-            InfoBar.warning("参数不完整", "至少填写一个视频文件夹",
+            InfoBar.warning(tr("参数不完整"), tr("至少填写一个视频文件夹"),
                             parent=self.main, position=InfoBarPosition.TOP)
             return None
 
         out = self.output.text().strip()
-        if not self._require_folder(out, "输出文件夹"):
+        if not self._require_folder(out, tr("输出文件夹")):
             return None
         for f in folders:
-            if not self._require_dir_exists(f, f"文件夹「{f}」"):
+            if not self._require_dir_exists(f, tr("文件夹「{0}」").format(f)):
                 return None
 
         transition_type = _TRANSITIONS[self.transition.currentIndex()][1]

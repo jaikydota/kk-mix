@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 
 from PySide6.QtCore import Qt
@@ -36,7 +38,7 @@ class LicenseDialog(QDialog):
         self.authorized = False
         self._machine_id = _license_core.get_machine_id() if _license_core else "DEV-MODE"
 
-        self.setWindowTitle("软件授权验证")
+        self.setWindowTitle(tr("软件授权验证"))
         self.setMinimumWidth(480)
         self.setWindowFlags(
             Qt.WindowType.Window
@@ -52,30 +54,30 @@ class LicenseDialog(QDialog):
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(10)
 
-        title = StrongBodyLabel("软件授权验证", self)
+        title = StrongBodyLabel(tr("软件授权验证"), self)
         title.setStyleSheet("font-size:15px;font-weight:bold;")
         layout.addWidget(title)
 
         tip = BodyLabel(
-            "首次使用需要授权码，请将下方机器码发送给管理员获取。",
+            tr("首次使用需要授权码，请将下方机器码发送给管理员获取。"),
             self,
         )
         tip.setWordWrap(True)
         layout.addWidget(tip)
 
-        layout.addWidget(BodyLabel("本机机器码:", self))
+        layout.addWidget(BodyLabel(tr("本机机器码:"), self))
         self.mid_edit = LineEdit(self)
         self.mid_edit.setText(self._machine_id)
         self.mid_edit.setReadOnly(True)
         layout.addWidget(self.mid_edit)
 
-        copy_btn = PushButton("复制机器码", self, FluentIcon.COPY)
+        copy_btn = PushButton(tr("复制机器码"), self, FluentIcon.COPY)
         copy_btn.clicked.connect(self._copy_mid)
         layout.addWidget(copy_btn)
 
-        layout.addWidget(BodyLabel("授权码:", self))
+        layout.addWidget(BodyLabel(tr("授权码:"), self))
         self.code_edit = LineEdit(self)
-        self.code_edit.setPlaceholderText("在此粘贴授权码")
+        self.code_edit.setPlaceholderText(tr("在此粘贴授权码"))
         self.code_edit.setClearButtonEnabled(True)
         layout.addWidget(self.code_edit)
 
@@ -85,10 +87,10 @@ class LicenseDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(12)
         btn_row.addStretch()
-        verify_btn = PrimaryPushButton("验证授权", self)
+        verify_btn = PrimaryPushButton(tr("验证授权"), self)
         verify_btn.clicked.connect(self._verify)
         btn_row.addWidget(verify_btn)
-        cancel_btn = PushButton("退出", self)
+        cancel_btn = PushButton(tr("退出"), self)
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
         btn_row.addStretch()
@@ -96,17 +98,17 @@ class LicenseDialog(QDialog):
 
     def _copy_mid(self):
         QApplication.clipboard().setText(self._machine_id)
-        self.tip_label.setText("✅ 机器码已复制到剪贴板")
+        self.tip_label.setText(tr("✅ 机器码已复制到剪贴板"))
         self.tip_label.setStyleSheet("color: #107c10;")
 
     def _verify(self):
         code = self.code_edit.text().strip()
         if not code:
-            self.tip_label.setText("请输入授权码")
+            self.tip_label.setText(tr("请输入授权码"))
             self.tip_label.setStyleSheet("color: #c42b1c;")
             return
         if _license_core is None:
-            self.tip_label.setText("本机未编译 _license_core.pyd，开发模式跳过验证")
+            self.tip_label.setText(tr("本机未编译 _license_core.pyd，开发模式跳过验证"))
             self.tip_label.setStyleSheet("color: #8a8a8a;")
             self.authorized = True
             self.accept()

@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 VERSION = "v10.3.0"
-APP_TITLE = f"中巨量 - 巨量剪辑 {VERSION}"
+APP_NAME = "中巨量 - 巨量剪辑"   # 显示时 tr(APP_NAME)，勿直接拼接
 
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".webm"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}

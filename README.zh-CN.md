@@ -89,6 +89,10 @@ uv run python kk_qt.py        # 或双击 start.cmd
 
 > 没放 FFmpeg 也能启动，但界面顶部会常驻一条「未找到 FFmpeg」的红色提示，所有处理功能都无法执行。
 
+### 界面语言
+
+界面支持**简体中文**和**英文**。首次启动跟随系统区域设置；随时点击左侧导航栏底部的 **English / 简体中文** 即可切换——窗口即时重建，日志内容保留。选择会保存到 `settings.json` 的 `language` 字段。
+
 ### 配置
 
 程序目录下的 `settings.json` 保存全局设置（也可在界面「全局设置」中修改）。仓库提供了 `settings.example.json`：
@@ -99,6 +103,7 @@ cp settings.example.json settings.json
 
 | 字段 | 说明 |
 |---|---|
+| `language` | 界面语言：`"zh"`、`"en"`，或 `""` 跟随系统 |
 | `tts_base_url` / `tts_api_key` | Index-TTS 服务地址与 api-key，仅「字幕转场拼接」需要 |
 | `verbose_log` | 打印完整的 ffmpeg 命令与 stderr |
 | `speed_priority` | `true` 用 `ultrafast` 预设，`false` 用 `medium` |
@@ -179,8 +184,11 @@ kk-mix/
     │   ├── paths.py         # 版本号、扩展名集合、资源路径
     │   ├── fonts.py         # 系统字体枚举（中文名映射）、标题自动换行
     │   ├── tts_client.py    # Index-TTS 客户端
+    │   ├── i18n.py          # tr() 与语言切换
+    │   ├── translations_en.py # 英文译文表（以中文原文为 key）
     │   └── license.py       # 授权对话框
-    └── tabs/                # 每个功能一个文件，均继承 BaseTab
+    ├── tabs/                # 每个功能一个文件，均继承 BaseTab
+    └── tools/check_i18n.py  # i18n 覆盖率检查
 ```
 
 ### 添加一个新功能页
@@ -189,6 +197,7 @@ kk-mix/
    - `class <Name>Worker(BatchWorker)`：实现 `run_batch() -> (success, summary)`，循环中调用 `self.ctrl.wait_if_paused()`，用 `self.run_cmd(cmd)` 执行 ffmpeg，设置 `self.output_dir`；
    - `class <Name>Tab(BaseTab)`：定义 `NAME / TITLE / ICON`，实现 `build_form()`（往 `self.form_layout` 填控件）和 `build_worker()`（校验参数并返回 Worker）。
 2. 在 `qt/main_window.py` 的 `_register_tabs()` 列表中加入 `<Name>Tab(self)`。
+3. 所有用户可见文本写成 `tr("中文")`（中文为源语言；带变量用 `tr("…{0}…").format(x)`，不要用 f-string），在 `qt/core/translations_en.py` 补英文，然后运行 `uv run python tools/check_i18n.py`——有未包装或缺译文的字符串会直接报错。
 
 更多约定见 [AGENTS.md](AGENTS.md)。
 

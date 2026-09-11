@@ -7,6 +7,8 @@ UI 特点：
 """
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 import shutil
 from pathlib import Path
@@ -80,11 +82,11 @@ class ConcatWorker(BatchWorker):
 
         min_count = min((len(v) for v in all_videos), default=0)
         if min_count == 0:
-            self.log("✗ 有文件夹中没有视频文件")
-            return False, "无视频文件"
+            self.log(tr("✗ 有文件夹中没有视频文件"))
+            return False, tr("无视频文件")
 
         bar = "=" * 60
-        self.log(f"\n{bar}\n开始批量转场拼接   文件夹数: {len(self.folders)}   每组视频数: {min_count}\n{bar}")
+        self.log(tr('\n{0}\n开始批量转场拼接   文件夹数: {1}   每组视频数: {2}\n{3}').format(bar, len(self.folders), min_count, bar))
 
         temp_dir = os.path.join(self.output, "_concat_temp_resize")
         ensure_dir(temp_dir)
@@ -93,35 +95,35 @@ class ConcatWorker(BatchWorker):
         try:
             for i in range(min_count):
                 if self.ctrl.wait_if_paused():
-                    self.log("已手动停止"); break
+                    self.log(tr("已手动停止")); break
 
                 group = [os.path.join(self.folders[j], all_videos[j][i]) for j in range(len(self.folders))]
                 out_name = f"concat_{i+1:03d}.mp4"
                 out_path = os.path.join(self.output, out_name)
 
-                self.log(f"\n[{i+1}/{min_count}] 拼接 {len(group)} 个视频")
+                self.log(tr('\n[{0}/{1}] 拼接 {2} 个视频').format(i + 1, min_count, len(group)))
                 normalized = self._normalize_group(group, temp_dir, i)
                 if self._concat_with_transition(normalized, out_path):
                     success += 1
                     size_mb = os.path.getsize(out_path) / 1024 / 1024
-                    self.log(f"  ✓ 成功: {out_name} ({size_mb:.1f} MB)")
+                    self.log(tr("  ✓ 成功: {0} ({1:.1f} MB)").format(out_name, size_mb))
                 else:
-                    self.log(f"  ✗ 失败")
+                    self.log(tr("  ✗ 失败"))
 
                 self.set_progress((i + 1) / min_count * 100)
-                self.set_status(f"转场拼接中 {i+1}/{min_count}")
+                self.set_status(tr("转场拼接中 {0}/{1}").format(i + 1, min_count))
         finally:
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
-                self.log("  临时文件夹已清理")
+                self.log(tr("  临时文件夹已清理"))
 
-        self.log(f"\n{bar}\n完成！成功生成 {success}/{min_count} 个视频\n{bar}")
-        return success > 0, f"成功 {success}/{min_count}"
+        self.log(tr('\n{0}\n完成！成功生成 {1}/{2} 个视频\n{3}').format(bar, success, min_count, bar))
+        return success > 0, tr("成功 {0}/{1}").format(success, min_count)
 
     # ─── 归一化 ───
     def _normalize_group(self, group: list[str], temp_dir: str, group_idx: int) -> list[str]:
         ref_w, ref_h, ref_fps = probe_resolution_fps(self.ffmpeg_path, group[0])
-        self.log(f"    基准分辨率: {ref_w}x{ref_h}，帧率: {ref_fps}fps")
+        self.log(tr("    基准分辨率: {0}x{1}，帧率: {2}fps").format(ref_w, ref_h, ref_fps))
 
         any_needs_norm = False
         for k in range(1, len(group)):
@@ -150,14 +152,14 @@ class ConcatWorker(BatchWorker):
 
             reasons = []
             if need_resize:
-                reasons.append(f"分辨率 {w}x{h}→{ref_w}x{ref_h}")
+                reasons.append(tr("分辨率 {0}x{1}→{2}x{3}").format(w, h, ref_w, ref_h))
             if need_fps:
-                reasons.append(f"帧率 {src_fps}→{ref_fps}fps")
+                reasons.append(tr("帧率 {0}→{1}fps").format(src_fps, ref_fps))
             if force_reencode and not need_resize and not need_fps:
-                reasons.append("timebase 对齐（xfade）")
+                reasons.append(tr("timebase 对齐（xfade）"))
             if need_audio_fix:
-                reasons.append("补充静音音频轨")
-            self.log(f"    需要归一化 [{k+1}]: {', '.join(reasons)}")
+                reasons.append(tr("补充静音音频轨"))
+            self.log(tr("    需要归一化 [{0}]: {1}").format(k + 1, ', '.join(reasons)))
 
             tmp_name = f"tmp_{group_idx:03d}_{k:02d}_{os.path.basename(src)}"
             tmp_path = os.path.join(temp_dir, tmp_name)
@@ -186,7 +188,7 @@ class ConcatWorker(BatchWorker):
             if r.returncode == 0 and os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
                 normalized.append(tmp_path)
             else:
-                self.log(f"    ✗ 归一化失败，使用原始文件: {os.path.basename(src)}")
+                self.log(tr("    ✗ 归一化失败，使用原始文件: {0}").format(os.path.basename(src)))
                 normalized.append(src)
         return normalized
 
@@ -212,16 +214,16 @@ class ConcatWorker(BatchWorker):
                 for v in videos:
                     d = probe_duration(self.ffmpeg_path, v)
                     if d <= 0:
-                        self.log(f"    ✗ 无法获取时长: {os.path.basename(v)}")
+                        self.log(tr("    ✗ 无法获取时长: {0}").format(os.path.basename(v)))
                         return False
                     durations.append(d)
-                    self.log(f"    时长: {os.path.basename(v)} = {d:.2f}s")
+                    self.log(tr("    时长: {0} = {1:.2f}s").format(os.path.basename(v), d))
 
                 td = self.td
                 min_dur = min(durations)
                 if td >= min_dur:
                     td = round(min_dur * 0.4, 3)
-                    self.log(f"    ⚠ 转场时长超过最短片段，自动调整为 {td:.2f}s")
+                    self.log(tr("    ⚠ 转场时长超过最短片段，自动调整为 {0:.2f}s").format(td))
 
                 parts = [f"[{i}:v]setsar=1[sv{i}]" for i in range(n)]
                 prev_v = "[sv0]"
@@ -256,7 +258,7 @@ class ConcatWorker(BatchWorker):
                 self.log(f"    stderr: {tail.strip()}")
             return False
         except Exception as e:
-            self.log(f"  ✗ 异常: {e}")
+            self.log(tr("  ✗ 异常: {0}").format(e))
             return False
 
 
@@ -267,7 +269,7 @@ class ConcatTab(BaseTab):
 
     def build_form(self):
         # 文件夹列表（可动态增减）
-        self.form_layout.addWidget(StrongBodyLabel("视频文件夹（按顺序拼接）", self), 0, 0, 1, 3)
+        self.form_layout.addWidget(StrongBodyLabel(tr("视频文件夹（按顺序拼接）"), self), 0, 0, 1, 3)
 
         self.rows: list[dict] = []
         list_holder = QFrame(self)
@@ -292,10 +294,10 @@ class ConcatTab(BaseTab):
 
         action_bar = QHBoxLayout()
         action_bar.setSpacing(10)
-        add_btn = PushButton("＋ 添加文件夹", self, FluentIcon.ADD)
+        add_btn = PushButton(tr("＋ 添加文件夹"), self, FluentIcon.ADD)
         add_btn.clicked.connect(self._add_row)
         action_bar.addWidget(add_btn)
-        hint = BodyLabel(f"可无限添加，至少保留 {_MIN_FIXED_ROWS} 个", self)
+        hint = BodyLabel(tr("可无限添加，至少保留 {0} 个").format(_MIN_FIXED_ROWS), self)
         hint.setStyleSheet("color: #8a8a8a;")
         action_bar.addWidget(hint)
         action_bar.addStretch(1)
@@ -310,9 +312,9 @@ class ConcatTab(BaseTab):
         # 输出文件夹
         self.output = LineEdit(self)
         self.output.setText(
-            os.path.join(os.path.expanduser("~"), "Desktop", "视频输出")
+            os.path.join(os.path.expanduser("~"), "Desktop", tr("视频输出"))
         )
-        self._add_folder_row(2, "输出文件夹", self.output, is_output=True)
+        self._add_folder_row(2, tr("输出文件夹"), self.output, is_output=True)
 
         # 转场时长
         self.td = DoubleSpinBox(self)
@@ -320,15 +322,15 @@ class ConcatTab(BaseTab):
         self.td.setValue(0.5)
         self.td.setSingleStep(0.1)
         self.td.setDecimals(2)
-        self.td.setSuffix(" 秒")
-        self._add_param_row(3, "转场时长", self.td, hint="0 = 无转场，直接拼接")
+        self.td.setSuffix(tr(" 秒"))
+        self._add_param_row(3, tr("转场时长"), self.td, hint=tr("0 = 无转场，直接拼接"))
 
         # 转场类型
         self.transition = ComboBox(self)
         for label, _ in _TRANSITIONS:
-            self.transition.addItem(label)
+            self.transition.addItem(tr(label))
         self.transition.setCurrentIndex(0)
-        self._add_param_row(4, "转场类型", self.transition)
+        self._add_param_row(4, tr("转场类型"), self.transition)
 
     # ─── 动态行 ───
     def _add_row(self):
@@ -338,13 +340,13 @@ class ConcatTab(BaseTab):
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.setSpacing(8)
 
-        label = BodyLabel(f"文件夹 {idx + 1}", row_widget)
+        label = BodyLabel(tr("文件夹 {0}").format(idx + 1), row_widget)
         label.setMinimumWidth(70)
 
         line_edit = LineEdit(row_widget)
-        line_edit.setPlaceholderText("选择要拼接的视频所在文件夹")
+        line_edit.setPlaceholderText(tr("选择要拼接的视频所在文件夹"))
 
-        browse_btn = PushButton("浏览", row_widget, FluentIcon.FOLDER)
+        browse_btn = PushButton(tr("浏览"), row_widget, FluentIcon.FOLDER)
         browse_btn.clicked.connect(lambda _=False, le=line_edit: self._browse_folder(le, False))
 
         remove_btn = PushButton("✕", row_widget)
@@ -369,8 +371,8 @@ class ConcatTab(BaseTab):
         if idx < _MIN_FIXED_ROWS:
             from qfluentwidgets import InfoBar, InfoBarPosition
             InfoBar.warning(
-                "不能移除",
-                f"前 {_MIN_FIXED_ROWS} 个文件夹不能删除",
+                tr("不能移除"),
+                tr("前 {0} 个文件夹不能删除").format(_MIN_FIXED_ROWS),
                 parent=self.main, position=InfoBarPosition.TOP,
             )
             return
@@ -382,7 +384,7 @@ class ConcatTab(BaseTab):
 
     def _refresh_rows(self):
         for i, row in enumerate(self.rows):
-            row["label"].setText(f"文件夹 {i + 1}")
+            row["label"].setText(tr("文件夹 {0}").format(i + 1))
             row["remove_btn"].setVisible(i >= _MIN_FIXED_ROWS)
 
     # ─── 构建 worker ───
@@ -391,15 +393,15 @@ class ConcatTab(BaseTab):
         folders = [f for f in folders if f]
         if not folders:
             from qfluentwidgets import InfoBar, InfoBarPosition
-            InfoBar.warning("参数不完整", "至少填写一个视频文件夹",
+            InfoBar.warning(tr("参数不完整"), tr("至少填写一个视频文件夹"),
                             parent=self.main, position=InfoBarPosition.TOP)
             return None
 
         out = self.output.text().strip()
-        if not self._require_folder(out, "输出文件夹"):
+        if not self._require_folder(out, tr("输出文件夹")):
             return None
         for f in folders:
-            if not self._require_dir_exists(f, f"文件夹「{f}」"):
+            if not self._require_dir_exists(f, tr("文件夹「{0}」").format(f)):
                 return None
 
         transition_type = _TRANSITIONS[self.transition.currentIndex()][1]

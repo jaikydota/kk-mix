@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 
 import httpx
@@ -46,11 +48,11 @@ class TTSClient:
         """
         global _reference_uploaded
         if _reference_uploaded:
-            return "参考音已就绪（本次已上传）"
+            return tr("参考音已就绪（本次已上传）")
 
         local = local_reference_path()
         if not os.path.exists(local):
-            return f"本地未找到参考音 {REF_FILENAME}，将直接引用服务端已有文件"
+            return tr("本地未找到参考音 {0}，将直接引用服务端已有文件").format(REF_FILENAME)
 
         try:
             with open(local, "rb") as f:
@@ -63,14 +65,14 @@ class TTSClient:
                 timeout=120,
             )
         except httpx.HTTPError as e:
-            raise TTSError(f"参考音上传失败: {e}") from e
+            raise TTSError(tr("参考音上传失败: {0}").format(e)) from e
 
         if resp.status_code != 200:
-            raise TTSError(f"参考音上传失败 {resp.status_code}: {resp.text[:200]}")
+            raise TTSError(tr("参考音上传失败 {0}: {1}").format(resp.status_code, resp.text[:200]))
 
         _reference_uploaded = True
         saved = resp.json().get("saved", [])
-        return f"参考音上传成功: {saved[0] if saved else REF_REMOTE_PATH}"
+        return tr("参考音上传成功: {0}").format(saved[0] if saved else REF_REMOTE_PATH)
 
     def synthesize(self, text: str, out_path: str,
                    seed: int = DEFAULT_SEED, timeout: float = 300.0) -> None:
@@ -84,19 +86,19 @@ class TTSClient:
                 timeout=timeout,
             )
         except httpx.HTTPError as e:
-            raise TTSError(f"TTS 请求失败: {e}") from e
+            raise TTSError(tr("TTS 请求失败: {0}").format(e)) from e
 
         if resp.status_code == 401:
-            raise TTSError("TTS 鉴权失败(401)，请检查全局设置中的 API Key")
+            raise TTSError(tr("TTS 鉴权失败(401)，请检查全局设置中的 API Key"))
         if resp.status_code != 200:
             detail = resp.text[:200]
             if "No such file" in resp.text:
-                detail = f"服务端缺少参考音 {REF_REMOTE_PATH}，请把参考音放到 assets 目录后重试"
-            raise TTSError(f"TTS 服务返回 {resp.status_code}: {detail}")
+                detail = tr("服务端缺少参考音 {0}，请把参考音放到 assets 目录后重试").format(REF_REMOTE_PATH)
+            raise TTSError(tr("TTS 服务返回 {0}: {1}").format(resp.status_code, detail))
 
         if not resp.content.startswith(b"RIFF"):
             ctype = resp.headers.get("content-type", "")
-            raise TTSError(f"TTS 返回非 WAV 数据 ({ctype}): {resp.text[:200]}")
+            raise TTSError(tr("TTS 返回非 WAV 数据 ({0}): {1}").format(ctype, resp.text[:200]))
 
         with open(out_path, "wb") as f:
             f.write(resp.content)

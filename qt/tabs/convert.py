@@ -1,6 +1,8 @@
 """批量格式转换。对应 kk.py 中的 create_convert_tab / batch_convert_operation / _convert_format_ffmpeg。"""
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 from pathlib import Path
 
@@ -29,34 +31,34 @@ class ConvertWorker(BatchWorker):
         ensure_dir(self.output_folder)
         files = list_media(self.folder, VIDEO_EXTS)
         if not files:
-            self.log("✗ 文件夹中没有视频文件")
-            return False, "无视频文件"
+            self.log(tr("✗ 文件夹中没有视频文件"))
+            return False, tr("无视频文件")
 
         bar = "=" * 60
-        self.log(f"\n{bar}\n开始批量格式转换   视频数: {len(files)}   目标格式: {self.target_format}\n{bar}")
+        self.log(tr('\n{0}\n开始批量格式转换   视频数: {1}   目标格式: {2}\n{3}').format(bar, len(files), self.target_format, bar))
 
         success = 0
         for idx, name in enumerate(files, 1):
             if self.ctrl.wait_if_paused():
-                self.log("已手动停止"); break
+                self.log(tr("已手动停止")); break
 
             in_path = os.path.join(self.folder, name)
             out_name = f"convert_{idx:03d}_{Path(name).stem}.{self.target_format}"
             out_path = os.path.join(self.output_folder, out_name)
 
-            self.log(f"\n[{idx}/{len(files)}] 处理: {name}")
+            self.log(tr('\n[{0}/{1}] 处理: {2}').format(idx, len(files), name))
             if self._convert_ffmpeg(in_path, out_path):
                 success += 1
                 size_mb = os.path.getsize(out_path) / 1024 / 1024
-                self.log(f"  ✓ 成功: {out_name} ({size_mb:.1f} MB)")
+                self.log(tr("  ✓ 成功: {0} ({1:.1f} MB)").format(out_name, size_mb))
             else:
-                self.log(f"  ✗ 失败: {name}")
+                self.log(tr("  ✗ 失败: {0}").format(name))
 
             self.set_progress(idx / len(files) * 100)
-            self.set_status(f"格式转换中 {idx}/{len(files)}")
+            self.set_status(tr("格式转换中 {0}/{1}").format(idx, len(files)))
 
-        self.log(f"\n{bar}\n完成！成功转换 {success}/{len(files)} 个视频\n{bar}")
-        return success > 0, f"成功 {success}/{len(files)}"
+        self.log(tr('\n{0}\n完成！成功转换 {1}/{2} 个视频\n{3}').format(bar, success, len(files), bar))
+        return success > 0, tr("成功 {0}/{1}").format(success, len(files))
 
     def _convert_ffmpeg(self, in_path: str, out_path: str) -> bool:
         audio_codec = _AUDIO_CODEC_BY_FMT.get(self.target_format, "aac")
@@ -80,7 +82,7 @@ class ConvertWorker(BatchWorker):
                 self.log(f"    stderr: {tail.strip()}")
             return False
         except Exception as e:
-            self.log(f"  ✗ 异常: {e}")
+            self.log(tr("  ✗ 异常: {0}").format(e))
             return False
 
 
@@ -91,28 +93,28 @@ class ConvertTab(BaseTab):
 
     def build_form(self):
         self.video_folder = LineEdit(self)
-        self._add_folder_row(0, "视频文件夹", self.video_folder,
-                             placeholder="选择需转换的视频所在文件夹")
+        self._add_folder_row(0, tr("视频文件夹"), self.video_folder,
+                             placeholder=tr("选择需转换的视频所在文件夹"))
 
         self.output_folder = LineEdit(self)
         self.output_folder.setText(
-            os.path.join(os.path.expanduser("~"), "Desktop", "视频输出")
+            os.path.join(os.path.expanduser("~"), "Desktop", tr("视频输出"))
         )
-        self._add_folder_row(1, "输出文件夹", self.output_folder, is_output=True)
+        self._add_folder_row(1, tr("输出文件夹"), self.output_folder, is_output=True)
 
         self.target_format = ComboBox(self)
         self.target_format.addItems(["mp4", "avi", "mov", "mkv"])
         self.target_format.setCurrentText("mp4")
-        self._add_param_row(2, "目标格式", self.target_format, hint="MP4 推荐")
+        self._add_param_row(2, tr("目标格式"), self.target_format, hint=tr("MP4 推荐"))
 
     def build_worker(self):
         folder = self.video_folder.text().strip()
         output_folder = self.output_folder.text().strip()
         target = self.target_format.currentText()
 
-        if not self._require_folder(folder, "视频文件夹") \
-           or not self._require_folder(output_folder, "输出文件夹") \
-           or not self._require_dir_exists(folder, "视频文件夹"):
+        if not self._require_folder(folder, tr("视频文件夹")) \
+           or not self._require_folder(output_folder, tr("输出文件夹")) \
+           or not self._require_dir_exists(folder, tr("视频文件夹")):
             return None
 
         return ConvertWorker(

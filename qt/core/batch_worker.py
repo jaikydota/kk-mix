@@ -7,6 +7,8 @@ BatchWorker 替代 kk.py 中的 `threading.Thread + root.update()` 模型：
 """
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import subprocess
 
 from PySide6.QtCore import QThread, Signal
@@ -60,7 +62,7 @@ class BatchWorker(QThread):
             ok, summary = self.run_batch()
             self.finished_signal.emit(ok, summary)
         except Exception as e:
-            self.log(f"✗ 批处理异常: {e}")
+            self.log(tr("✗ 批处理异常: {0}").format(e))
             self.finished_signal.emit(False, str(e))
 
     # ─── 提供给子类的便捷方法 ───

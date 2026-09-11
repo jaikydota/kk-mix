@@ -1,6 +1,8 @@
 """批量裁剪比例。对应 kk.py 中的 batch_crop_operation / _crop_ffmpeg / _crop_image。"""
 from __future__ import annotations
 
+from qt.core.i18n import tr
+
 import os
 from pathlib import Path
 
@@ -36,19 +38,19 @@ class CropWorker(BatchWorker):
 
         exts = IMAGE_EXTS if self.is_image else VIDEO_EXTS
         files = list_media(self.source_folder, exts)
-        type_label = "图片" if self.is_image else "视频"
+        type_label = tr("图片") if self.is_image else tr("视频")
         if not files:
-            self.log(f"✗ 文件夹中没有{type_label}文件")
-            return False, f"无{type_label}文件"
+            self.log(tr("✗ 文件夹中没有{0}文件").format(type_label))
+            return False, tr("无{0}文件").format(type_label)
 
         bar = "=" * 60
-        self.log(f"\n{bar}\n开始批量裁剪{type_label}比例   {type_label}数: {len(files)}   目标比例: {self.ratio_str}\n{bar}")
+        self.log(tr('\n{0}\n开始批量裁剪{1}比例   {2}数: {3}   目标比例: {4}\n{5}').format(bar, type_label, type_label, len(files), self.ratio_str, bar))
 
         success = 0
         ratio_token = self.ratio_str.replace(":", "x")
         for idx, name in enumerate(files, 1):
             if self.ctrl.wait_if_paused():
-                self.log("已手动停止"); break
+                self.log(tr("已手动停止")); break
 
             in_path = os.path.join(self.source_folder, name)
             if self.is_image:
@@ -61,18 +63,18 @@ class CropWorker(BatchWorker):
                 out_path = os.path.join(self.output_folder, out_name)
                 ok = self._crop_video(in_path, out_path)
 
-            self.log(f"\n[{idx}/{len(files)}] 处理: {name}")
+            self.log(tr('\n[{0}/{1}] 处理: {2}').format(idx, len(files), name))
             if ok:
                 success += 1
-                self.log(f"  ✓ 成功: {out_name}")
+                self.log(tr("  ✓ 成功: {0}").format(out_name))
             else:
-                self.log(f"  ✗ 失败: {name}")
+                self.log(tr("  ✗ 失败: {0}").format(name))
 
             self.set_progress(idx / len(files) * 100)
-            self.set_status(f"裁剪{type_label}中 {idx}/{len(files)}")
+            self.set_status(tr("裁剪{0}中 {1}/{2}").format(type_label, idx, len(files)))
 
-        self.log(f"\n{bar}\n完成！成功处理 {success}/{len(files)} 个{type_label}\n输出目录: {self.output_folder}\n{bar}")
-        return success > 0, f"成功 {success}/{len(files)}"
+        self.log(tr('\n{0}\n完成！成功处理 {1}/{2} 个{3}\n输出目录: {4}\n{5}').format(bar, success, len(files), type_label, self.output_folder, bar))
+        return success > 0, tr("成功 {0}/{1}").format(success, len(files))
 
     def _crop_video(self, in_path: str, out_path: str) -> bool:
         try:
@@ -110,7 +112,7 @@ class CropWorker(BatchWorker):
                 self.log(f"    stderr: {tail.strip()}")
             return False
         except Exception as e:
-            self.log(f"  ✗ 异常: {e}")
+            self.log(tr("  ✗ 异常: {0}").format(e))
             return False
 
     def _crop_image(self, in_path: str, out_path: str) -> bool:
@@ -138,7 +140,7 @@ class CropWorker(BatchWorker):
                 cropped.save(out_path, quality=95)
             return True
         except Exception as e:
-            self.log(f"  ✗ 异常: {e}")
+            self.log(tr("  ✗ 异常: {0}").format(e))
             return False
 
 
@@ -155,24 +157,24 @@ class CropTab(BaseTab):
         h = QHBoxLayout(holder)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(18)
-        rb_v = RadioButton("视频", self); rb_v.setChecked(True)
-        rb_i = RadioButton("图片", self)
+        rb_v = RadioButton(tr("视频"), self); rb_v.setChecked(True)
+        rb_i = RadioButton(tr("图片"), self)
         self.mode_group.addButton(rb_v, id=0)
         self.mode_group.addButton(rb_i, id=1)
         h.addWidget(rb_v); h.addWidget(rb_i); h.addStretch(1)
-        self._add_param_row(0, "媒体类型", holder)
+        self._add_param_row(0, tr("媒体类型"), holder)
 
         self.source_folder = LineEdit(self)
-        self._add_folder_row(1, "源文件夹", self.source_folder)
+        self._add_folder_row(1, tr("源文件夹"), self.source_folder)
 
         self.output_folder = LineEdit(self)
-        self._add_folder_row(2, "输出文件夹", self.output_folder, is_output=True,
-                             placeholder="留空则使用 源文件夹/crop_output")
+        self._add_folder_row(2, tr("输出文件夹"), self.output_folder, is_output=True,
+                             placeholder=tr("留空则使用 源文件夹/crop_output"))
 
         self.ratio = ComboBox(self)
         self.ratio.addItems(_RATIOS)
         self.ratio.setCurrentText("9:16")
-        self._add_param_row(3, "目标比例", self.ratio, hint="居中裁剪，不会拉伸")
+        self._add_param_row(3, tr("目标比例"), self.ratio, hint=tr("居中裁剪，不会拉伸"))
 
     def build_worker(self):
         source = self.source_folder.text().strip()
@@ -180,13 +182,13 @@ class CropTab(BaseTab):
         ratio_str = self.ratio.currentText().strip()
         is_image = self._mode_values[max(0, self.mode_group.checkedId())] == "image"
 
-        if not self._require_folder(source, "源文件夹") \
-           or not self._require_dir_exists(source, "源文件夹"):
+        if not self._require_folder(source, tr("源文件夹")) \
+           or not self._require_dir_exists(source, tr("源文件夹")):
             return None
 
         if ":" not in ratio_str:
             from qfluentwidgets import InfoBar, InfoBarPosition
-            InfoBar.error("比例格式错误", ratio_str,
+            InfoBar.error(tr("比例格式错误"), ratio_str,
                           parent=self.main, position=InfoBarPosition.TOP)
             return None
 
