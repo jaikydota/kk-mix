@@ -98,7 +98,9 @@ kk_qt.py
 - **设置管理**：`AppSettings` dataclass，JSON 持久化，Worker 构造时拷贝快照
 - **i18n**：所有用户可见文本（控件、提示、日志）必须 `tr("中文")`；带变量用 `tr("…{0}…").format(x)`，禁止 f-string；
   模块级/类级常量（TITLE、选项列表）保持中文、在使用处 `tr()`；按中文匹配数据的逻辑加 `# i18n: skip`；
-  提交前 `uv run python tools/check_i18n.py` 必须通过
+  提交前 `uv run python tools/check_i18n.py` 必须通过；
+  语言切换会重建主窗口，表单内容靠 `BaseTab.capture_state / restore_state` 按控件顺序还原——
+  新 Tab 只要用常规 qfluentwidgets 输入控件即可自动生效，动态行需提供 `self.rows` 和 `_add_row()`
 - **密钥/凭据**：任何 API key、服务地址、加密种子、密码都不得写进仓库文件；
   运行期配置走 `settings.json`（gitignore），编译期密钥走 `build_secrets.env` / 环境变量
 - **构建**：先 `uv run python setup_cython.py build_ext --inplace`，再 `build_qt.cmd`
@@ -109,6 +111,7 @@ kk_qt.py
 ## 已知待办
 
 - `AppSettings.thread_count` 在设置界面可改，但所有 Worker 目前均为串行，尚未使用该值
+- 英文模式下字体下拉仍显示中文字体名（`fonts.py` 的映射，字体名属专有名词，有意不译）
 
 ## 现有功能 Tab（15 个）
 

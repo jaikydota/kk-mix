@@ -23,12 +23,18 @@ from PySide6.QtWidgets import (
 from qfluentwidgets import (
     BodyLabel,
     CardWidget,
+    CheckBox,
+    ComboBox,
+    DoubleSpinBox,
     FluentIcon,
     InfoBar,
     InfoBarPosition,
     LineEdit,
+    PlainTextEdit,
     PrimaryPushButton,
     PushButton,
+    RadioButton,
+    SpinBox,
     StrongBodyLabel,
 )
 
@@ -74,6 +80,62 @@ class BaseTab(QWidget):
         outer.addWidget(self.start_btn)
 
         outer.addStretch(1)
+
+    # ─── 表单状态快照（语言切换重建窗口时保持用户已填内容） ───
+    # 顺序固定，两次构建的控件树完全一致，因此可按序号一一对应
+    _STATE_TYPES = (LineEdit, PlainTextEdit, ComboBox, SpinBox, DoubleSpinBox, CheckBox, RadioButton)
+
+    def _state_widgets(self) -> list:
+        widgets = []
+        for cls in self._STATE_TYPES:
+            widgets.extend(self.findChildren(cls))
+        return widgets
+
+    def capture_state(self) -> dict:
+        """收集当前表单的全部输入值。"""
+        values = []
+        for w in self._state_widgets():
+            if isinstance(w, (CheckBox, RadioButton)):
+                values.append(w.isChecked())
+            elif isinstance(w, ComboBox):
+                values.append(w.currentIndex())
+            elif isinstance(w, (SpinBox, DoubleSpinBox)):
+                values.append(w.value())
+            elif isinstance(w, PlainTextEdit):
+                values.append(w.toPlainText())
+            else:
+                values.append(w.text())
+        return {"rows": len(getattr(self, "rows", []) or []), "values": values}
+
+    def restore_state(self, state: dict) -> None:
+        """把快照写回重建后的表单；结构不一致时静默跳过。"""
+        if not state:
+            return
+        # 动态行（转场拼接等）需先补足行数，否则控件数量对不上
+        rows = getattr(self, "rows", None)
+        if rows is not None and hasattr(self, "_add_row"):
+            while len(self.rows) < state.get("rows", 0):
+                self._add_row()
+
+        widgets = self._state_widgets()
+        values = state.get("values", [])
+        if len(widgets) != len(values):
+            return
+        for w, v in zip(widgets, values):
+            try:
+                if isinstance(w, (CheckBox, RadioButton)):
+                    w.setChecked(bool(v))
+                elif isinstance(w, ComboBox):
+                    if 0 <= v < w.count():
+                        w.setCurrentIndex(v)
+                elif isinstance(w, (SpinBox, DoubleSpinBox)):
+                    w.setValue(v)
+                elif isinstance(w, PlainTextEdit):
+                    w.setPlainText(v)
+                else:
+                    w.setText(v)
+            except Exception:
+                pass
 
     # ─── 子类覆写 ───
     def build_form(self) -> None:

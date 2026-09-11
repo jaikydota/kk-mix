@@ -239,7 +239,7 @@ class MainWindow(QMainWindow):
         )
 
     def _toggle_language(self, *_):
-        """中英文切换：保存设置后重建主窗口（日志内容保留）。"""
+        """中英文切换：保存设置后重建主窗口，表单内容 / 当前页 / 日志均保留。"""
         if self.current_worker and self.current_worker.isRunning():
             InfoBar.warning(
                 tr("有任务进行中"), tr("请等待当前任务结束后再切换语言。"),
@@ -252,11 +252,28 @@ class MainWindow(QMainWindow):
             self.settings.save(settings_path())
         except Exception as e:
             self.log(tr("[设置] 保存失败: {0}").format(e))
+
+        # 先在旧语言下取快照，再切语言重建
+        states = {
+            t.NAME: t.capture_state()
+            for t in (self.stack.widget(i) for i in range(self.stack.count()))
+            if isinstance(t, BaseTab)
+        }
+        current_index = self.stack.currentIndex()
         i18n.set_language(new_lang)
 
         win = MainWindow()
         win.setGeometry(self.geometry())
         win.log_view.setHtml(self.log_view.toHtml())
+        for i in range(win.stack.count()):
+            tab = win.stack.widget(i)
+            if isinstance(tab, BaseTab) and tab.NAME in states:
+                tab.restore_state(states[tab.NAME])
+        if 0 <= current_index < win.stack.count():
+            win.stack.setCurrentIndex(current_index)
+            restored = win.stack.widget(current_index)
+            if isinstance(restored, BaseTab):
+                win.nav.setCurrentItem(restored.NAME)
         win.show()
         MainWindow._instance = win   # 持有引用，防止被回收
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)

@@ -56,6 +56,24 @@ def find_ffprobe() -> str | None:
     return None
 
 
+def ffprobe_for(ffmpeg_path: str) -> str:
+    """由 ffmpeg 路径推导同目录的 ffprobe。
+
+    不能用 path.replace("ffmpeg", "ffprobe")：当项目本身位于含 "ffmpeg" 的目录
+    （如 D:\\ffmpeg\\kk-mix\\）时会把目录名一起改坏。
+    """
+    if not ffmpeg_path:
+        return find_ffprobe() or ""
+    folder, name = os.path.split(ffmpeg_path)
+    probe_name = "ffprobe.exe" if name.lower().endswith(".exe") else "ffprobe"
+    if not folder:                       # PATH 中的裸命令
+        return probe_name
+    candidate = os.path.join(folder, probe_name)
+    if os.path.exists(candidate):
+        return candidate
+    return find_ffprobe() or candidate
+
+
 def _make_si():
     if sys.platform != "win32":
         return None
@@ -71,7 +89,7 @@ def probe_resolution_fps(ffmpeg_path: str, video_path: str) -> tuple[int, int, f
     """
     import re
 
-    ffprobe_path = (ffmpeg_path or "").replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg", "ffprobe")
+    ffprobe_path = ffprobe_for(ffmpeg_path)
     if ffprobe_path:
         try:
             cmd = [
@@ -125,7 +143,7 @@ def probe_video_info(ffmpeg_path: str, video_path: str) -> tuple[int, int, float
     """
     import json
 
-    ffprobe_path = (ffmpeg_path or "").replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg", "ffprobe")
+    ffprobe_path = ffprobe_for(ffmpeg_path)
     if ffprobe_path:
         try:
             cmd = [
@@ -165,7 +183,7 @@ def probe_video_info(ffmpeg_path: str, video_path: str) -> tuple[int, int, float
 
 def probe_duration(ffmpeg_path: str, video_path: str) -> float:
     """用 ffprobe 获取视频时长（秒）；失败返回 0.0。"""
-    ffprobe_path = (ffmpeg_path or "").replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg", "ffprobe")
+    ffprobe_path = ffprobe_for(ffmpeg_path)
     if not ffprobe_path:
         return 0.0
     try:
