@@ -85,13 +85,13 @@ Both filenames are already in `.gitignore`, so they will never be committed by a
 uv run python kk_qt.py        # or double-click start.cmd
 ```
 
-When run from source there is **no compiled license module**, so the app automatically enters development mode and skips license-key verification.
+Licensing is **off by default**, so the app starts straight up with no license key needed. See [Licensing](#licensing-system-and-build-secrets-read-before-releasing) if you want to enable it for a release.
 
 > The app still launches without FFmpeg, but a persistent red "FFmpeg not found" banner appears and no processing feature will run.
 
 ### Language
 
-The UI is available in **English** and **Simplified Chinese**. On first launch it follows your system locale; click **简体中文 / English** at the bottom of the left navigation bar to switch at any time — the window is rebuilt instantly and the log is preserved. The choice is saved as `language` in `settings.json`.
+The UI is available in **English** and **Simplified Chinese**, defaulting to **Simplified Chinese**. Click **简体中文 / English** at the bottom of the left navigation bar to switch at any time — the window is rebuilt instantly and the log is preserved. The choice is saved as `language` in `settings.json`.
 
 ### Configuration
 
@@ -103,7 +103,7 @@ cp settings.example.json settings.json
 
 | Field | Meaning |
 |---|---|
-| `language` | UI language: `"en"`, `"zh"`, or `""` to follow the system locale |
+| `language` | UI language: `"zh"` (default), `"en"`, or `"auto"` to follow the system locale |
 | `tts_base_url` / `tts_api_key` | Index-TTS endpoint and api-key; only needed by *Narrated concat* |
 | `verbose_log` | Print the full ffmpeg command line and stderr |
 | `speed_priority` | `true` uses the `ultrafast` preset, `false` uses `medium` |
@@ -147,18 +147,25 @@ uv run pyinstaller kk_qt.spec --clean --noconfirm   # produces dist/kk_qt/
 
 ### Licensing system and build secrets (read before releasing)
 
-The app ships with a per-machine licensing scheme: the machine ID is an MD5 of the motherboard UUID plus CPU ID; a license key is an AES-CBC encrypted JSON blob (expiry date, bound machine ID); `keygen.exe` mints the keys. The logic lives in `_license_core.pyx` and is compiled to a `.pyd` to raise the bar for reverse engineering.
+Licensing is **disabled by default** — clone, run, and everything works with no license key. It only turns on if you explicitly build with `KK_LICENSE_ENABLED=1`.
+
+When enabled, the app uses a per-machine scheme: the machine ID is an MD5 of the motherboard UUID plus CPU ID; a license key is an AES-CBC encrypted JSON blob (expiry date, bound machine ID); `keygen.exe` mints the keys. The logic lives in `_license_core.pyx` and is compiled to a `.pyd` to raise the bar for reverse engineering.
+
+The on/off switch is **burned into the `.pyd` at compile time**, not read from `settings.json` or an environment variable — anything readable at runtime could simply be flipped off by an end user, which would defeat the purpose. So turning it off costs nothing in security when it is on.
 
 **No real secret is stored in this repo.** The encryption seed in the `.pyx` is a placeholder, injected at compile time by `setup_cython.py`:
 
 ```bash
 cp build_secrets.env.example build_secrets.env   # gitignored
 # edit build_secrets.env:
+#   KK_LICENSE_ENABLED=1                  # omit or set 0 to ship without licensing
 #   KK_LICENSE_SEED=<a long random string>
 build_qt.cmd
 ```
 
-An environment variable of the same name also works and takes priority. If it is not provided, the development default seed `kk-mix-dev` is used — **fine for local testing, never for a real release**. Changing the seed invalidates every previously issued license key.
+`setup_cython.py` prints the resulting state on every build, e.g. `授权校验：启用（KK_LICENSE_ENABLED=1），种子：自定义`.
+
+Environment variables of the same names also work and take priority. If the seed is not provided, the development default `kk-mix-dev` is used — **fine for local testing, never for a real release**. Changing the seed invalidates every previously issued license key.
 
 `keygen.exe` has no access gate of its own, so **never ship it alongside the app** — anyone holding it can mint license keys for your build.
 

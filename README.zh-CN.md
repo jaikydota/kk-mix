@@ -85,13 +85,13 @@ kk-mix/
 uv run python kk_qt.py        # 或双击 start.cmd
 ```
 
-源码运行时**没有编译授权模块**，程序自动进入开发模式，跳过授权码验证。
+授权校验**默认关闭**，直接就能跑，不需要任何授权码。需要为发布版启用请看[授权机制与密钥](#授权机制与密钥发布前必读)。
 
 > 没放 FFmpeg 也能启动，但界面顶部会常驻一条「未找到 FFmpeg」的红色提示，所有处理功能都无法执行。
 
 ### 界面语言
 
-界面支持**简体中文**和**英文**。首次启动跟随系统区域设置；随时点击左侧导航栏底部的 **English / 简体中文** 即可切换——窗口即时重建，日志内容保留。选择会保存到 `settings.json` 的 `language` 字段。
+界面支持**简体中文**和**英文**，默认**简体中文**。随时点击左侧导航栏底部的 **English / 简体中文** 即可切换——窗口即时重建，日志内容保留。选择会保存到 `settings.json` 的 `language` 字段。
 
 ### 配置
 
@@ -103,7 +103,7 @@ cp settings.example.json settings.json
 
 | 字段 | 说明 |
 |---|---|
-| `language` | 界面语言：`"zh"`、`"en"`，或 `""` 跟随系统 |
+| `language` | 界面语言：`"zh"`（默认）、`"en"`，或 `"auto"` 跟随系统 |
 | `tts_base_url` / `tts_api_key` | Index-TTS 服务地址与 api-key，仅「字幕转场拼接」需要 |
 | `verbose_log` | 打印完整的 ffmpeg 命令与 stderr |
 | `speed_priority` | `true` 用 `ultrafast` 预设，`false` 用 `medium` |
@@ -143,18 +143,25 @@ uv run pyinstaller kk_qt.spec --clean --noconfirm   # 生成 dist/kk_qt/
 
 ### 授权机制与密钥（发布前必读）
 
-程序内置「一机一码」授权：机器码 = 主板 UUID + CPU ID 的 MD5；授权码 = AES-CBC 加密的 JSON（到期时间、绑定机器码）；`keygen.exe` 用于生成授权码。核心逻辑在 `_license_core.pyx`，编译为 `.pyd` 提高逆向门槛。
+授权校验**默认关闭**——clone 下来直接跑，不需要授权码。只有在编译时显式指定 `KK_LICENSE_ENABLED=1` 才会启用。
+
+启用后是「一机一码」方案：机器码 = 主板 UUID + CPU ID 的 MD5；授权码 = AES-CBC 加密的 JSON（到期时间、绑定机器码）；`keygen.exe` 用于生成授权码。核心逻辑在 `_license_core.pyx`，编译为 `.pyd` 提高逆向门槛。
+
+这个开关**在编译时烧录进 `.pyd`**，不放在 `settings.json` 或环境变量里——任何运行期可读的位置，终端用户自己就能关掉，等于没有校验。所以「默认关闭」不会削弱启用时的强度。
 
 **仓库里不包含任何真实密钥。** `.pyx` 中的加密种子是占位符，由 `setup_cython.py` 在编译时注入：
 
 ```bash
 cp build_secrets.env.example build_secrets.env   # 已 gitignore
 # 编辑 build_secrets.env：
+#   KK_LICENSE_ENABLED=1                  # 不填或填 0 则发布版也不做授权校验
 #   KK_LICENSE_SEED=<一段随机长字符串>
 build_qt.cmd
 ```
 
-也可以直接用同名环境变量（优先级高于文件）。不设置时使用开发默认种子 `kk-mix-dev`，**仅供本地调试，切勿用于正式发布**。换了 seed 后，之前发出的授权码全部失效。
+每次编译 `setup_cython.py` 都会打印当前状态，例如 `授权校验：启用（KK_LICENSE_ENABLED=1），种子：自定义`。
+
+两者也都可以用同名环境变量（优先级高于文件）。种子不设置时使用开发默认值 `kk-mix-dev`，**仅供本地调试，切勿用于正式发布**。换了 seed 后，之前发出的授权码全部失效。
 
 `keygen.exe` 自身不设任何访问门槛，**切勿随程序一起分发**——拿到它的人可以为你的构建版本任意生成授权码。
 

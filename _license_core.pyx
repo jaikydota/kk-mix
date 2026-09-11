@@ -22,12 +22,22 @@ from cryptography.hazmat.backends import default_backend
 cdef bytes _APP_SEED = b"@@KK_LICENSE_SEED@@"
 cdef bytes _KEY_CACHE = b""
 
+# 授权校验总开关：编译时由 KK_LICENSE_ENABLED 烧录进 .pyd，默认关闭。
+# 之所以不做成 settings.json / 环境变量，是因为那些运行期可改的位置
+# 终端用户自己就能关掉，等于没有校验。
+cdef bint _LICENSE_ENABLED = @@KK_LICENSE_ENABLED@@
+
 cdef bytes _derive_key():
     global _KEY_CACHE
     if _KEY_CACHE:
         return _KEY_CACHE
     _KEY_CACHE = hashlib.sha256(_APP_SEED).digest()[:32]
     return _KEY_CACHE
+
+
+def license_enabled() -> bool:
+    """本次构建是否启用授权校验（开关烧录在 .pyd 内，运行期无法篡改）。"""
+    return bool(_LICENSE_ENABLED)
 
 
 # ─────────────────────────────────────────────────────────────

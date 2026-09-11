@@ -179,6 +179,12 @@ class SettingsDialog(MessageBoxBase):
             layout.addWidget(card)
             return
 
+        from qt.core.license import licensing_active
+        if not licensing_active():
+            g.addWidget(BodyLabel(tr("本次构建未启用授权校验（编译时 KK_LICENSE_ENABLED 未开启）"), card), 0, 0)
+            layout.addWidget(card)
+            return
+
         try:
             mid = _license_core.get_machine_id()
         except Exception:

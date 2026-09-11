@@ -26,9 +26,8 @@ def main():
     app = QApplication(sys.argv)
     setTheme(Theme.AUTO)
 
-    # 界面语言：settings.json 的 language，空则跟随系统区域
-    lang = AppSettings.load(settings_path()).language
-    i18n.set_language(lang or i18n.detect_system_language())
+    # 界面语言：settings.json 的 language（"zh" / "en" / "auto"），默认中文
+    i18n.set_language(AppSettings.load(settings_path()).language)
 
     window = MainWindow()
     MainWindow._instance = window

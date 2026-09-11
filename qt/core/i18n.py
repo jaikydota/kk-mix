@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 SUPPORTED = ("zh", "en")
+DEFAULT = "zh"          # settings.language 为空时用它；填 "auto" 才跟随系统
 LANGUAGE_NAMES = {"zh": "简体中文", "en": "English"}
 
 _lang = "zh"
@@ -18,8 +19,11 @@ _tables: dict[str, dict[str, str]] = {}
 
 
 def set_language(lang: str) -> None:
+    """lang 取 "zh" / "en" / "auto"；其余值（含空串）一律回落到 DEFAULT。"""
     global _lang
-    _lang = lang if lang in SUPPORTED else "zh"
+    if lang == "auto":
+        lang = detect_system_language()
+    _lang = lang if lang in SUPPORTED else DEFAULT
 
 
 def current() -> str:
@@ -27,7 +31,7 @@ def current() -> str:
 
 
 def detect_system_language() -> str:
-    """系统区域为中文时返回 zh，其余返回 en。"""
+    """系统区域为中文时返回 zh，其余返回 en（仅 language="auto" 时使用）。"""
     try:
         from PySide6.QtCore import QLocale
         return "zh" if QLocale.system().name().lower().startswith("zh") else "en"

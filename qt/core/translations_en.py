@@ -91,6 +91,7 @@ EN: dict[str, str] = {
     "最大 50M，越大画质越好": "Up to 50M; higher means better quality",
     "授权信息": "License",
     "当前为开发模式（未编译 _license_core.pyd）": "Development mode (_license_core.pyd not compiled)",
+    "本次构建未启用授权校验（编译时 KK_LICENSE_ENABLED 未开启）": "Licensing is disabled in this build (KK_LICENSE_ENABLED was not set at compile time)",
     "本机机器码：{0}": "Machine ID: {0}",
     "复制": "Copy",
     "到期时间：{0}": "Expires: {0}",

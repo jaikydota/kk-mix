@@ -7,11 +7,12 @@
 - 语言：Python ≥ 3.10（开发用 3.14），入口 `kk_qt.py`，业务模块全部在 `qt/` 目录下
 - UI：PySide6 + PySide6-Fluent-Widgets（Windows 11 Fluent 风格）
 - 核心：调用 `ffmpeg.exe` / `ffprobe.exe` 完成视频处理（二进制不入库，放项目根目录或 PATH）
-- 授权：`_license_core.pyx` → Cython 编译为 `.pyd`；密钥由 `setup_cython.py` 在编译时从环境变量 / `build_secrets.env` 注入，源码只有占位符
+- 授权：`_license_core.pyx` → Cython 编译为 `.pyd`；种子与总开关由 `setup_cython.py` 在编译时从环境变量 / `build_secrets.env` 注入，源码只有占位符
+- 授权校验默认**关闭**（`KK_LICENSE_ENABLED` 未设置），开关烧录在 `.pyd` 内，运行期不可篡改；判定统一走 `qt/core/license.py` 的 `licensing_active()`
 - 打包：Cython → PyInstaller → `dist/kk_qt/`（内嵌 ffmpeg.exe + .pyd），脚本 `build_qt.cmd`
 - 依赖管理：`uv`（运行命令统一用 `uv run python ...`）
 - 版本号：唯一来源 `qt/core/paths.py` 的 `VERSION`，`pyproject.toml` 的 `version` 同步
-- 界面语言：中英双语，`qt/core/i18n.py` 的 `tr()`，中文为源语言，英文表在 `qt/core/translations_en.py`
+- 界面语言：中英双语，`qt/core/i18n.py` 的 `tr()`，中文为源语言且为默认语言，英文表在 `qt/core/translations_en.py`
 - 开源协议：MIT；Windows 平台
 
 ## 目录结构

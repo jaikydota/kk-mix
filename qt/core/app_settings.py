@@ -15,8 +15,8 @@ class AppSettings:
     tts_base_url: str = ""
     tts_api_key: str = ""
 
-    # 界面语言："zh" / "en"，空字符串 = 跟随系统
-    language: str = ""
+    # 界面语言："zh" / "en" / "auto"（跟随系统），默认中文
+    language: str = "zh"
 
     # 调试
     verbose_log: bool = False

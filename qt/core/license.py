@@ -125,10 +125,24 @@ class LicenseDialog(QDialog):
             self.tip_label.setStyleSheet("color: #c42b1c;")
 
 
+def licensing_active() -> bool:
+    """本次构建是否真的启用授权校验。
+
+    两种情况直接放行：
+      1. 没有 _license_core.pyd（源码开发模式）
+      2. .pyd 编译时 KK_LICENSE_ENABLED 未开启
+    旧版 .pyd 没有 license_enabled()，按启用处理（保守）。
+    """
+    if _license_core is None:
+        return False
+    enabled = getattr(_license_core, "license_enabled", None)
+    return True if enabled is None else bool(enabled())
+
+
 def check_license(parent=None) -> bool:
     """已有有效授权直接放行；否则弹窗验证。"""
-    if _license_core is None:
-        return True  # 开发模式兜底
+    if not licensing_active():
+        return True
     saved = _license_core.load_license()
     if saved:
         ok, _ = _license_core.verify_auth_code(saved)
