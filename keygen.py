@@ -11,7 +11,19 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime, timedelta
 
-import _license_core
+try:
+    import _license_core
+except ImportError:
+    _license_core = None   # 未编译 .pyd，main() 里给出可操作的提示
+
+_MISSING_CORE_MSG = (
+    "未找到授权核心模块 _license_core\n\n"
+    "keygen 依赖 Cython 编译产物 _license_core*.pyd，仓库中只有源码 _license_core.pyx。\n\n"
+    "请先在项目根目录执行：\n"
+    "    uv run python setup_cython.py build_ext --inplace\n\n"
+    "（需要安装 Visual Studio Build Tools 的「使用 C++ 的桌面开发」工作负载）\n"
+    "编译完成后根目录会出现 _license_core.cp3xx-win_amd64.pyd，再重新运行本工具。"
+)
 
 
 def _resource_path(relative_path: str) -> str:
@@ -122,6 +134,13 @@ class KeygenApp:
 
 def main():
     root = tk.Tk()
+    if _license_core is None:
+        root.withdraw()
+        print(_MISSING_CORE_MSG, file=sys.stderr)
+        messagebox.showerror("缺少 _license_core.pyd", _MISSING_CORE_MSG)
+        root.destroy()
+        sys.exit(1)
+
     style = ttk.Style()
     style.configure('Accent.TButton', font=('Microsoft YaHei', 10, 'bold'))
     app = KeygenApp(root)

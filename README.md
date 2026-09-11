@@ -214,6 +214,8 @@ More conventions in [AGENTS.md](AGENTS.md).
 
 **`setup_cython.py` cannot find `cl.exe`** — MSVC Build Tools are not installed, or you need to run it from the "x64 Native Tools Command Prompt".
 
+**`keygen.py` reports a missing `_license_core`** — The repo only ships the source `_license_core.pyx`. Build it first with `uv run python setup_cython.py build_ext --inplace`; the resulting `.pyd` is gitignored, so it must be rebuilt after a fresh clone (and after anything that cleans the project root).
+
 **"Font failed to load" when adding titles** — The selected font is not a TTF/OTF/TTC, or its path contains special characters; pick another system font.
 
 **Narrated concat returns 401 / missing reference audio** — Check the api-key in `settings.json`, and make sure `assets/tts_reference.wav` exists (it is uploaded on first run).

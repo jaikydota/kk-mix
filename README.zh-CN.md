@@ -210,6 +210,8 @@ kk-mix/
 
 **`setup_cython.py` 报找不到 `cl.exe`** — 未安装 MSVC Build Tools，或需要在「x64 Native Tools Command Prompt」中执行。
 
+**`keygen.py` 提示缺少 `_license_core`** — 仓库只含源码 `_license_core.pyx`，需先执行 `uv run python setup_cython.py build_ext --inplace` 编译。生成的 `.pyd` 已 gitignore，所以全新 clone 后（以及任何清理过项目根目录之后）都要重新编译一次。
+
 **添加标题时「字体加载失败」** — 选择的字体文件不是 TTF/OTF/TTC，或路径含特殊字符；换一个系统字体重试。
 
 **字幕转场拼接报 401 / 缺少参考音** — 检查 `settings.json` 的 api-key；确认 `assets/tts_reference.wav` 存在（首次运行需上传）。
