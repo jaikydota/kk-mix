@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QMainWindow,
-    QScrollArea,
     QSplitter,
     QStackedWidget,
     QVBoxLayout,
@@ -28,7 +27,9 @@ from qfluentwidgets import (
     NavigationItemPosition,
     ProgressBar,
     PushButton,
+    SingleDirectionScrollArea,
     TextEdit,
+    TransparentToolButton,
 )
 
 from qt.core.app_settings import AppSettings
@@ -63,13 +64,14 @@ class MainWindow(QMainWindow):
         self.ctrl = BatchControl()
         self.current_worker: BatchWorker | None = None
         self._trigger_btn: PushButton | None = None
+        self._log_mode = "normal"
 
         self.settings = AppSettings.load(settings_path())
 
         self.ffmpeg_path = find_ffmpeg()
 
         self.setWindowTitle(f"{tr(APP_NAME)} {VERSION}")
-        self.resize(1180, 760)
+        self.resize(1180, 880)
         icon_path = resource_path(os.path.join("assets", "logo.ico"))
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
@@ -106,7 +108,10 @@ class MainWindow(QMainWindow):
         # 导航项一多（15 个功能页 + 3 个底部项），qfluentwidgets 会把 nav 的
         # minimumHeight 顶到 ~870px，主窗口就再也缩不小了。这里包一层滚动区：
         # nav 保留自身高度，窗口变矮时滚动显示，而不是把导航项压到互相重叠。
-        self.nav_scroll = QScrollArea(self)
+        # 用 SingleDirectionScrollArea 而非 QScrollArea：它的滚动条是悬浮式的，
+        # 不占用视口宽度，也不会在导航栏旁边杵一条灰色长条。
+        self.nav_scroll = SingleDirectionScrollArea(orient=Qt.Vertical)
+        self.nav_scroll.setParent(self)
         self.nav_scroll.setWidget(self.nav)
         self.nav_scroll.setWidgetResizable(True)
         self.nav_scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -114,9 +119,6 @@ class MainWindow(QMainWindow):
         self.nav_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
         self.nav_scroll.viewport().setStyleSheet("background: transparent;")
         self.nav.installEventFilter(self)
-        self.nav_scroll.verticalScrollBar().rangeChanged.connect(
-            lambda *_: self._sync_nav_width()
-        )
 
         body_layout.addWidget(self.nav_scroll)
         self._sync_nav_width()
@@ -129,28 +131,21 @@ class MainWindow(QMainWindow):
 
         body_layout.addWidget(self.stack, 1)
 
-        bottom = self._build_bottom_panel()
+        self.bottom_panel = self._build_bottom_panel()
 
-        splitter = QSplitter(Qt.Vertical, self)
-        splitter.setChildrenCollapsible(False)
-        splitter.addWidget(body)
-        splitter.addWidget(bottom)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([520, 200])
+        self.splitter = QSplitter(Qt.Vertical, self)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.addWidget(body)
+        self.splitter.addWidget(self.bottom_panel)
+        self.splitter.setStretchFactor(0, 3)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setSizes([620, 220])
 
-        root.addWidget(splitter)
+        root.addWidget(self.splitter)
 
     def _sync_nav_width(self):
-        """滚动区宽度跟随导航栏的展开/收起，并为纵向滚动条预留空间。
-
-        用 maximum() 而非 isVisible() 判断滚动条是否占位：构建期滚动条尚未
-        实际显示，此时按不可见计算会让视口比导航栏窄一条，把文字横向裁掉。
-        nav 高度固定，滚动范围只随窗口高度变化，不会与本方法互相触发振荡。
-        """
-        bar = self.nav_scroll.verticalScrollBar()
-        extra = bar.sizeHint().width() if bar.maximum() > 0 else 0
-        self.nav_scroll.setFixedWidth(self.nav.width() + extra)
+        """滚动区宽度跟随导航栏的展开/收起（滚动条悬浮，不需要额外留宽）。"""
+        self.nav_scroll.setFixedWidth(self.nav.width())
 
     def eventFilter(self, obj, event):
         if obj is self.nav and event.type() == QEvent.Type.Resize:
@@ -192,12 +187,20 @@ class MainWindow(QMainWindow):
         self.export_btn = PushButton(tr("导出日志"), self, FluentIcon.SAVE)
         self.export_btn.clicked.connect(self._export_log)
 
+        # 日志区折叠 / 最大化：把竖向空间让给上面的表单
+        self.log_collapse_btn = TransparentToolButton(FluentIcon.DOWN, self)
+        self.log_collapse_btn.clicked.connect(self._toggle_log_collapsed)
+        self.log_max_btn = TransparentToolButton(FluentIcon.FULL_SCREEN, self)
+        self.log_max_btn.clicked.connect(self._toggle_log_maximized)
+
         top.addWidget(self.status_label)
         top.addWidget(self.progress, 1)
         top.addWidget(self.pause_btn)
         top.addWidget(self.stop_btn)
         top.addWidget(self.clear_btn)
         top.addWidget(self.export_btn)
+        top.addWidget(self.log_collapse_btn)
+        top.addWidget(self.log_max_btn)
         v.addLayout(top)
 
         self.log_view = TextEdit(self)
@@ -206,6 +209,35 @@ class MainWindow(QMainWindow):
         v.addWidget(self.log_view, 1)
 
         return panel
+
+    # ─────────────────── 日志区折叠 / 最大化 ───────────────────
+    def _toggle_log_collapsed(self):
+        self._set_log_mode("normal" if self._log_mode == "collapsed" else "collapsed")
+
+    def _toggle_log_maximized(self):
+        self._set_log_mode("normal" if self._log_mode == "maximized" else "maximized")
+
+    def _set_log_mode(self, mode: str):
+        """mode: collapsed / normal / maximized。"""
+        self._log_mode = mode
+        self.log_view.setVisible(mode != "collapsed")
+
+        total = self.splitter.height() or (self.height() - 40)
+        if mode == "collapsed":
+            bar_h = self.bottom_panel.minimumSizeHint().height()
+            self.splitter.setSizes([max(total - bar_h, 1), bar_h])
+        elif mode == "maximized":
+            self.splitter.setSizes([max(int(total * 0.12), 80), int(total * 0.88)])
+        else:
+            self.splitter.setSizes([int(total * 0.72), max(int(total * 0.28), 160)])
+
+        collapsed = mode == "collapsed"
+        self.log_collapse_btn.setIcon(FluentIcon.UP if collapsed else FluentIcon.DOWN)
+        self.log_collapse_btn.setToolTip(tr("展开日志") if collapsed else tr("折叠日志"))
+        maximized = mode == "maximized"
+        self.log_max_btn.setIcon(FluentIcon.MINIMIZE if maximized else FluentIcon.FULL_SCREEN)
+        self.log_max_btn.setToolTip(tr("还原日志") if maximized else tr("最大化日志"))
+        self.log_max_btn.setEnabled(not collapsed)
 
     # ─────────────────── 注册 Tab ───────────────────
     def _register_tabs(self):
@@ -229,6 +261,9 @@ class MainWindow(QMainWindow):
         ]
         for tab in tabs:
             self._add_tab(tab)
+
+        # 功能页与「语言 / 设置 / 关于」之间用横线分隔，避免中间一大段空白
+        self.nav.addSeparator(position=NavigationItemPosition.BOTTOM)
 
         other = "en" if i18n.current() == "zh" else "zh"
         self.nav.addItem(
@@ -257,6 +292,7 @@ class MainWindow(QMainWindow):
         )
 
         self._sync_nav_width()
+        self._set_log_mode(self._log_mode)
 
         if self.stack.count() > 0:
             first_tab = self.stack.widget(0)
@@ -300,6 +336,7 @@ class MainWindow(QMainWindow):
         win = MainWindow()
         win.setGeometry(self.geometry())
         win.log_view.setHtml(self.log_view.toHtml())
+        win._set_log_mode(self._log_mode)
         for i in range(win.stack.count()):
             tab = win.stack.widget(i)
             if isinstance(tab, BaseTab) and tab.NAME in states:
