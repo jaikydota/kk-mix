@@ -1,7 +1,8 @@
 """
 授权码生成器 - 独立 GUI 工具
-需要输入管理员密码才能使用
 核心加解密逻辑由 _license_core.pyd 提供（Cython 编译，防反编译）
+
+注意：本工具不设访问口令，请勿随 kk_qt 一起分发给最终用户。
 """
 
 import os
@@ -34,41 +35,7 @@ class KeygenApp:
         if os.path.exists(icon_path):
             self.root.iconbitmap(icon_path)
 
-        self.authenticated = False
-        self._show_password_screen()
-
-    def _show_password_screen(self):
-        """密码验证界面"""
-        self.pw_frame = ttk.Frame(self.root, padding=40)
-        self.pw_frame.pack(fill='both', expand=True)
-
-        ttk.Label(self.pw_frame, text="管理员验证",
-                  font=('Microsoft YaHei', 16, 'bold')).pack(pady=(20, 5))
-        ttk.Label(self.pw_frame, text="请输入管理员密码以继续",
-                  foreground='gray').pack(pady=(0, 20))
-
-        self.pw_var = tk.StringVar()
-        pw_entry = ttk.Entry(self.pw_frame, textvariable=self.pw_var,
-                             show='*', width=30, font=('Consolas', 12))
-        pw_entry.pack(pady=(0, 10))
-
-        self.pw_status = ttk.Label(self.pw_frame, text="", foreground='red')
-        self.pw_status.pack(pady=(0, 15))
-
-        ttk.Button(self.pw_frame, text="确认",
-                   command=self._verify_password,
-                   style='Accent.TButton').pack()
-
-        pw_entry.focus_set()
-        pw_entry.bind('<Return>', lambda e: self._verify_password())
-
-    def _verify_password(self):
-        if _license_core.verify_admin_password(self.pw_var.get()):
-            self.authenticated = True
-            self.pw_frame.destroy()
-            self._show_generator_screen()
-        else:
-            self.pw_status.config(text="密码错误，请重试")
+        self._show_generator_screen()
 
     def _show_generator_screen(self):
         """授权码生成界面"""

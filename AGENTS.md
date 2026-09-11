@@ -22,7 +22,7 @@ kk-mix/
 ├── kk_qt.spec                 # PyInstaller 打包配置（.gitignore 中显式 !kk_qt.spec）
 ├── build_qt.cmd               # 一键打包：Cython → PyInstaller → ZIP
 ├── setup_cython.py            # Cython 编译脚本 + 密钥注入
-├── keygen.py                  # 授权码生成器（Tkinter 独立工具）
+├── keygen.py                  # 授权码生成器（Tkinter 独立工具，无访问口令，不可随程序分发）
 ├── _license_core.pyx          # 授权核心源码（含 @@占位符@@，编译时替换）
 ├── settings.example.json      # 配置模板；settings.json 本身已 gitignore
 ├── build_secrets.env.example  # 密钥模板；build_secrets.env 已 gitignore

@@ -147,19 +147,20 @@ uv run pyinstaller kk_qt.spec --clean --noconfirm   # produces dist/kk_qt/
 
 ### Licensing system and build secrets (read before releasing)
 
-The app ships with a per-machine licensing scheme: the machine ID is an MD5 of the motherboard UUID plus CPU ID; a license key is an AES-CBC encrypted JSON blob (expiry date, bound machine ID); `keygen.exe` requires an admin password to mint keys. The logic lives in `_license_core.pyx` and is compiled to a `.pyd` to raise the bar for reverse engineering.
+The app ships with a per-machine licensing scheme: the machine ID is an MD5 of the motherboard UUID plus CPU ID; a license key is an AES-CBC encrypted JSON blob (expiry date, bound machine ID); `keygen.exe` mints the keys. The logic lives in `_license_core.pyx` and is compiled to a `.pyd` to raise the bar for reverse engineering.
 
-**No real secrets are stored in this repo.** The encryption seed and the admin password hash in the `.pyx` are placeholders, injected at compile time by `setup_cython.py`:
+**No real secret is stored in this repo.** The encryption seed in the `.pyx` is a placeholder, injected at compile time by `setup_cython.py`:
 
 ```bash
 cp build_secrets.env.example build_secrets.env   # gitignored
 # edit build_secrets.env:
 #   KK_LICENSE_SEED=<a long random string>
-#   KK_ADMIN_PASSWORD=<keygen admin password>
 build_qt.cmd
 ```
 
-Environment variables of the same name also work and take priority. If neither is provided, development defaults are used (seed `kk-mix-dev`, password `admin`) — **fine for local testing, never for a real release**. Changing the seed invalidates every previously issued license key.
+An environment variable of the same name also works and takes priority. If it is not provided, the development default seed `kk-mix-dev` is used — **fine for local testing, never for a real release**. Changing the seed invalidates every previously issued license key.
+
+`keygen.exe` has no access gate of its own, so **never ship it alongside the app** — anyone holding it can mint license keys for your build.
 
 If you do not want licensing at all, just delete the `check_license()` call in `kk_qt.py`; nothing else depends on the `.pyd`.
 

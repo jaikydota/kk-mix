@@ -17,7 +17,7 @@ from cryptography.hazmat.backends import default_backend
 
 # ── Cython typed 内部常量（不进 Python 符号表） ──
 # 注意：@@...@@ 占位符由 setup_cython.py 在编译时替换。
-# 未提供 KK_LICENSE_SEED / KK_ADMIN_PASSWORD 时使用开发默认值（seed=kk-mix-dev，密码=admin），
+# 未提供 KK_LICENSE_SEED 时使用开发默认值（seed=kk-mix-dev），
 # 正式发布前务必通过环境变量或 build_secrets.env 提供真实值，源码里不会留下密钥。
 cdef bytes _APP_SEED = b"@@KK_LICENSE_SEED@@"
 cdef bytes _KEY_CACHE = b""
@@ -184,15 +184,3 @@ def get_license_info() -> dict | None:
     except Exception:
         pass
     return None
-
-
-# ─────────────────────────────────────────────────────────────
-# keygen 管理员密码验证（哈希比对，不存明文）
-# ─────────────────────────────────────────────────────────────
-
-cdef bytes _ADMIN_PW_HASH = (
-@@KK_ADMIN_PW_HASH@@
-)
-
-def verify_admin_password(str pw) -> bool:
-    return hashlib.sha256(pw.encode()).digest() == _ADMIN_PW_HASH

@@ -143,19 +143,20 @@ uv run pyinstaller kk_qt.spec --clean --noconfirm   # 生成 dist/kk_qt/
 
 ### 授权机制与密钥（发布前必读）
 
-程序内置「一机一码」授权：机器码 = 主板 UUID + CPU ID 的 MD5；授权码 = AES-CBC 加密的 JSON（到期时间、绑定机器码）；`keygen.exe` 需管理员密码才能生成授权码。核心逻辑在 `_license_core.pyx`，编译为 `.pyd` 提高逆向门槛。
+程序内置「一机一码」授权：机器码 = 主板 UUID + CPU ID 的 MD5；授权码 = AES-CBC 加密的 JSON（到期时间、绑定机器码）；`keygen.exe` 用于生成授权码。核心逻辑在 `_license_core.pyx`，编译为 `.pyd` 提高逆向门槛。
 
-**仓库里不包含任何真实密钥。** `.pyx` 中的加密种子和管理员密码哈希是占位符，由 `setup_cython.py` 在编译时注入：
+**仓库里不包含任何真实密钥。** `.pyx` 中的加密种子是占位符，由 `setup_cython.py` 在编译时注入：
 
 ```bash
 cp build_secrets.env.example build_secrets.env   # 已 gitignore
 # 编辑 build_secrets.env：
 #   KK_LICENSE_SEED=<一段随机长字符串>
-#   KK_ADMIN_PASSWORD=<keygen 管理员密码>
 build_qt.cmd
 ```
 
-也可以直接用同名环境变量（优先级高于文件）。不设置时使用开发默认值（seed=`kk-mix-dev`，密码=`admin`），**仅供本地调试，切勿用于正式发布**。换了 seed 后，之前发出的授权码全部失效。
+也可以直接用同名环境变量（优先级高于文件）。不设置时使用开发默认种子 `kk-mix-dev`，**仅供本地调试，切勿用于正式发布**。换了 seed 后，之前发出的授权码全部失效。
+
+`keygen.exe` 自身不设任何访问门槛，**切勿随程序一起分发**——拿到它的人可以为你的构建版本任意生成授权码。
 
 如果你不需要授权功能，直接删掉 `kk_qt.py` 中的 `check_license()` 调用即可，其余代码不依赖 `.pyd`。
 
