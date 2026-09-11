@@ -1,53 +1,51 @@
-# kk-mix — FFmpeg 批处理视频编辑工具（Qt 版）
+# kk-mix — FFmpeg 批处理视频混剪工具（Qt 版）
+
+面向 AI 助手 / 贡献者的项目约定。用户向文档见 README.md。
 
 ## 项目概览
 
-- 语言：Python 3.14，入口 `kk_qt.py`，业务模块全部在 `qt/` 目录下
+- 语言：Python ≥ 3.10（开发用 3.14），入口 `kk_qt.py`，业务模块全部在 `qt/` 目录下
 - UI：PySide6 + PySide6-Fluent-Widgets（Windows 11 Fluent 风格）
-- 核心：调用 `ffmpeg.exe` / `ffprobe.exe` 完成视频处理
-- 授权：`_license_core.pyx` → Cython 编译为 `.pyd`（防反编译）
-- 打包：Cython → PyInstaller → `dist/kk_qt/`（内嵌 ffmpeg.exe + .pyd）
+- 核心：调用 `ffmpeg.exe` / `ffprobe.exe` 完成视频处理（二进制不入库，放项目根目录或 PATH）
+- 授权：`_license_core.pyx` → Cython 编译为 `.pyd`；密钥由 `setup_cython.py` 在编译时从环境变量 / `build_secrets.env` 注入，源码只有占位符
+- 打包：Cython → PyInstaller → `dist/kk_qt/`（内嵌 ffmpeg.exe + .pyd），脚本 `build_qt.cmd`
 - 依赖管理：`uv`（运行命令统一用 `uv run python ...`）
-- 版本：v9.6，Windows 平台
+- 版本号：唯一来源 `qt/core/paths.py` 的 `VERSION`，`pyproject.toml` 的 `version` 同步
+- 开源协议：MIT；Windows 平台
 
 ## 目录结构
 
 ```
 kk-mix/
 ├── kk_qt.py                   # Qt 版入口（QApplication + License + MainWindow）
-├── kk_qt.spec                 # PyInstaller 打包配置
+├── kk_qt.spec                 # PyInstaller 打包配置（.gitignore 中显式 !kk_qt.spec）
 ├── build_qt.cmd               # 一键打包：Cython → PyInstaller → ZIP
-├── setup_cython.py            # Cython 编译脚本
-├── keygen.py                  # 授权码生成器（独立工具）
-├── _license_core.pyx          # 授权核心源码（禁止分发）
-├── qt/
-│   ├── main_window.py         # 主窗口：NavigationInterface + QStackedWidget + 日志面板
-│   ├── settings_window.py     # 全局设置对话框（MessageBoxBase）
-│   ├── core/
-│   │   ├── paths.py           # 路径工具：resource_path / settings_path / list_media
-│   │   ├── ffmpeg_helper.py   # FFmpeg 工具：find_ffmpeg / probe_* / encode_preset
-│   │   ├── app_settings.py    # @dataclass AppSettings + JSON 持久化
-│   │   ├── batch_worker.py    # BatchControl + BatchWorker(QThread) 基类
-│   │   ├── license.py         # LicenseDialog(QDialog) + check_license
-│   │   ├── readme.py          # ReadmeDialog(QDialog) + check_readme（首次启动必读）
-│   │   └── fonts.py           # list_system_fonts + wrap_title_text
-│   └── tabs/
-│       ├── base.py            # BaseTab 抽象基类（所有功能 Tab 继承）
-│       ├── merge.py           # 左右分屏合并
-│       ├── concat.py          # 转场拼接（动态文件夹行 + xfade）
-│       ├── split.py           # 批量分割视频
-│       ├── pip.py             # 画中画合成
-│       ├── speed.py           # 批量变速/倒放
-│       ├── rotate.py          # 批量旋转/翻转
-│       ├── watermark.py       # 批量添加水印
-│       ├── volume.py          # 批量调整音量
-│       ├── title.py           # 批量添加标题（字体/颜色/换行）
-│       ├── music.py           # 批量填充音乐
-│       ├── crop.py            # 批量裁剪比例
-│       ├── compress.py        # 批量压缩视频
-│       ├── convert.py         # 批量格式转换
-│       └── extract.py         # 批量提取视频帧
-└── old_kk/                    # 旧版 Tkinter 代码（归档，不再维护）
+├── setup_cython.py            # Cython 编译脚本 + 密钥注入
+├── keygen.py                  # 授权码生成器（Tkinter 独立工具）
+├── _license_core.pyx          # 授权核心源码（含 @@占位符@@，编译时替换）
+├── settings.example.json      # 配置模板；settings.json 本身已 gitignore
+├── build_secrets.env.example  # 密钥模板；build_secrets.env 已 gitignore
+├── docs/
+│   └── index-tts-api.md       # Index-TTS 接口约定
+├── assets/                    # logo.ico / logo.png；tts_reference.wav 用户自备（gitignore）
+└── qt/
+    ├── main_window.py         # 主窗口：NavigationInterface + QStackedWidget + 日志面板
+    ├── settings_window.py     # 全局设置对话框（MessageBoxBase）
+    ├── core/
+    │   ├── paths.py           # VERSION / APP_TITLE / 扩展名集合 / resource_path / list_media
+    │   ├── ffmpeg_helper.py   # find_ffmpeg / probe_* / encode_preset / quality_args
+    │   ├── app_settings.py    # @dataclass AppSettings + JSON 持久化
+    │   ├── batch_worker.py    # BatchControl + BatchWorker(QThread) 基类
+    │   ├── tts_client.py      # Index-TTS 客户端（上传参考音 + 合成）
+    │   ├── license.py         # LicenseDialog + check_license（无 .pyd 时开发模式放行）
+    │   └── fonts.py           # list_system_fonts + wrap_title_text
+    └── tabs/
+        ├── base.py            # BaseTab 抽象基类
+        ├── merge.py           # 左右分屏合并
+        ├── concat.py          # 转场拼接（含 _TRANSITIONS 表）
+        ├── subtitle_concat.py # 字幕转场拼接（TTS 配音对齐）
+        ├── split.py / pip.py / speed.py / rotate.py / watermark.py / volume.py
+        ├── title.py / music.py / crop.py / compress.py / convert.py / extract.py
 ```
 
 ## 架构模式
@@ -79,6 +77,8 @@ kk_qt.py
 2. qt/main_window.py → _register_tabs()
    - 导入 <Name>Tab
    - 添加到 tabs 列表
+
+3. README.md 功能表加一行
 ```
 
 ## 关键约定
@@ -90,11 +90,17 @@ kk_qt.py
 - **FFmpeg 执行**：`self.run_cmd(cmd)` 统一入口（隐藏黑窗 + 详细日志 + 编码容错）
 - **输出目录**：Worker 必须设置 `self.output_dir`，完成后 InfoBar 可打开文件夹
 - **设置管理**：`AppSettings` dataclass，JSON 持久化，Worker 构造时拷贝快照
-- **授权**：所有逻辑在 `_license_core.pyx`，禁止在 .py 文件中出现密钥/密码明文
+- **密钥/凭据**：任何 API key、服务地址、加密种子、密码都不得写进仓库文件；
+  运行期配置走 `settings.json`（gitignore），编译期密钥走 `build_secrets.env` / 环境变量
 - **构建**：先 `uv run python setup_cython.py build_ext --inplace`，再 `build_qt.cmd`
 - **打包排除**：`kk_qt.spec` 已排除 tkinter / moviepy / matplotlib 等无关大模块
 - **UPX 白名单**：Qt6*.dll 和 VC Runtime 禁止 UPX 压缩（会导致启动崩溃）
+- **依赖**：新增第三方库前确认确有引用；`pyproject.toml` 改动后运行 `uv lock`
 
-## 现有功能 Tab（14 个）
+## 已知待办
 
-merge / concat / split / pip / speed / rotate / watermark / volume / title / music / crop / compress / convert / extract
+- `AppSettings.thread_count` 在设置界面可改，但所有 Worker 目前均为串行，尚未使用该值
+
+## 现有功能 Tab（15 个）
+
+merge / concat / subtitle_concat / split / pip / speed / rotate / watermark / volume / title / music / crop / compress / convert / extract

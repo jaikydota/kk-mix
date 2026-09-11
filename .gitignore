@@ -19,6 +19,7 @@ ENV/
 build/
 dist/
 *.spec
+!kk_qt.spec
 *.egg
 *.egg-info/
 MANIFEST
@@ -70,6 +71,9 @@ _license_core.c
 _license_core*.pyd
 
 # 项目特定
+settings.json
+assets/*.wav
+build_secrets.env
 examples/
 temp/*
 

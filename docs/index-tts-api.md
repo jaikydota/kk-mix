@@ -4,7 +4,7 @@
 
 Index-TTS 是一个支持参考音色克隆的语音合成服务，通过上传参考音频来定义音色，然后基于该音色合成任意文本的语音。
 
-**服务网关地址（外网访问）：** `https://your-index-tts-host.example.com/index-tts`
+**服务地址：** 由你自行部署的 Index-TTS 服务，例如 `http://<your-index-tts-host>`
 
 > **注意：** 所有请求均须在 HTTP Header 中携带 `api-key` 进行鉴权。
 
@@ -29,8 +29,8 @@ api-key: your_api_key_here
 
 | 接口           | 方法 | 地址                                                        | 说明             |
 |----------------|------|-------------------------------------------------------------|------------------|
-| 上传参考音频   | POST | `https://your-index-tts-host.example.com/index-tts/upload`      | 上传克隆音色所需的参考音频文件 |
-| 语音合成       | POST | `https://your-index-tts-host.example.com/index-tts/tts_url`     | 基于参考音色合成文本语音       |
+| 上传参考音频   | POST | `http://<your-index-tts-host>/upload`      | 上传克隆音色所需的参考音频文件 |
+| 语音合成       | POST | `http://<your-index-tts-host>/tts_url`     | 基于参考音色合成文本语音       |
 
 ---
 
@@ -43,7 +43,7 @@ api-key: your_api_key_here
 **请求地址**
 
 ```
-POST https://your-index-tts-host.example.com/index-tts/upload
+POST http://<your-index-tts-host>/upload
 ```
 
 **请求头**
@@ -88,13 +88,13 @@ POST https://your-index-tts-host.example.com/index-tts/upload
 
 ```bash
 # 上传单个参考音频
-curl -X POST https://your-index-tts-host.example.com/index-tts/upload \
+curl -X POST http://<your-index-tts-host>/upload \
   -H "api-key: your_api_key_here" \
   -F "files=@温柔亲和.wav" \
   -F "paths=your_dir/温柔亲和.wav"
 
 # 上传多个参考音频
-curl -X POST https://your-index-tts-host.example.com/index-tts/upload \
+curl -X POST http://<your-index-tts-host>/upload \
   -H "api-key: your_api_key_here" \
   -F "files=@温柔亲和.wav" \
   -F "paths=your_dir/温柔亲和.wav" \
@@ -108,7 +108,7 @@ curl -X POST https://your-index-tts-host.example.com/index-tts/upload \
 import httpx
 
 api_key = "your_api_key_here"
-upload_url = "https://your-index-tts-host.example.com/index-tts/upload"
+upload_url = "http://<your-index-tts-host>/upload"
 
 with open("温柔亲和.wav", "rb") as f:
     audio_bytes = f.read()
@@ -132,7 +132,7 @@ print(response.json())
 **请求地址**
 
 ```
-POST https://your-index-tts-host.example.com/index-tts/tts_url
+POST http://<your-index-tts-host>/tts_url
 ```
 
 **请求头**
@@ -164,14 +164,14 @@ POST https://your-index-tts-host.example.com/index-tts/tts_url
 
 ```bash
 # 单个参考音合成
-curl -X POST https://your-index-tts-host.example.com/index-tts/tts_url \
+curl -X POST http://<your-index-tts-host>/tts_url \
   -H "api-key: your_api_key_here" \
   -H "Content-Type: application/json" \
   -d '{"text": "你好，欢迎使用语音合成服务", "audio_paths": ["your_dir/温柔亲和.wav"]}' \
   --output output.wav
 
 # 多参考音混合合成（指定 seed 保证音色一致）
-curl -X POST https://your-index-tts-host.example.com/index-tts/tts_url \
+curl -X POST http://<your-index-tts-host>/tts_url \
   -H "api-key: your_api_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -188,7 +188,7 @@ curl -X POST https://your-index-tts-host.example.com/index-tts/tts_url \
 import httpx
 
 api_key = "your_api_key_here"
-tts_url = "https://your-index-tts-host.example.com/index-tts/tts_url"
+tts_url = "http://<your-index-tts-host>/tts_url"
 
 payload = {
     "text": "你好，欢迎使用语音合成服务",
@@ -230,7 +230,7 @@ print("语音合成完成，已保存至 output.wav")
 ```python
 import httpx
 
-BASE_URL = "https://your-index-tts-host.example.com/index-tts"
+BASE_URL = "http://<your-index-tts-host>"
 API_KEY = "your_api_key_here"
 HEADERS = {"api-key": API_KEY}
 

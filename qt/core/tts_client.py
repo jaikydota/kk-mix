@@ -14,9 +14,10 @@ import httpx
 
 from .paths import resource_path
 
-# 参考音：本地文件与服务端保存路径（服务端实际保存为 assets/<REF_REMOTE_PATH>）
-REF_FILENAME = "kk参考音_u1_550d9c97.wav"
-REF_REMOTE_PATH = f"cloud_mix/{REF_FILENAME}"
+# 参考音：把你想克隆的音色 WAV 放到 assets/tts_reference.wav（不随仓库分发，见 README）
+# 服务端实际保存为 assets/<REF_REMOTE_PATH>
+REF_FILENAME = "tts_reference.wav"
+REF_REMOTE_PATH = f"kk-mix/{REF_FILENAME}"
 
 # 固定 seed 保证整批合成音色一致
 DEFAULT_SEED = 42

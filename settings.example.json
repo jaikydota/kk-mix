@@ -1,0 +1,9 @@
+{
+  "tts_base_url": "http://127.0.0.1:8000",
+  "tts_api_key": "",
+  "verbose_log": false,
+  "thread_count": 1,
+  "speed_priority": true,
+  "compress_video": false,
+  "bitrate": "2M"
+}

@@ -1,15 +1,13 @@
 [project]
-name = "han-mix"
-version = "7.0.0"
-description = "FFmpeg 批处理视频编辑工具"
+name = "kk-mix"
+version = "10.3.0"
+description = "基于 FFmpeg 的 Windows 批量视频混剪工具（PySide6 Fluent UI）"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "cryptography>=44.0.0",
-    "fastmcp>=3.1.0",
     "httpx>=0.27.0",
-    "moviepy==1.0.3",
-    "numpy==2.0.2",
-    "openai>=2.24.0",
     "pillow==11.3.0",
     "pyside6>=6.11.0",
     "pyside6-fluent-widgets[full]>=1.11.2",

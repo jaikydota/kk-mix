@@ -230,7 +230,7 @@ class MainWindow(QMainWindow):
 
     def _show_about(self, *_):
         InfoBar.info(
-            APP_TITLE, "重构UI界面",
+            APP_TITLE, "基于 FFmpeg 的批量视频混剪工具（MIT 开源）",
             parent=self, position=InfoBarPosition.TOP_RIGHT, duration=3000,
         )
 
