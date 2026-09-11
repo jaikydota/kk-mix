@@ -1,183 +1,221 @@
 # kk-mix
 
-基于 FFmpeg 的 Windows 批量视频混剪工具。PySide6 + Fluent Design 界面，15 个批处理功能页，一键打包为免安装绿色版。
+**English** | [简体中文](README.zh-CN.md)
+
+A Windows batch video editing toolkit powered by FFmpeg. PySide6 + Fluent Design UI, 15 batch operations, packable into a single portable folder.
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-## 功能一览
+## Features
 
-| 功能 | 说明 |
+| Feature | Description |
 |---|---|
-| 左右分屏合并 | 两个文件夹按序配对，`hstack` 左右拼成 1080×1080；支持图片输入 |
-| 转场拼接 | N 个文件夹按序取第 i 个视频拼接，20 种 `xfade` 转场 + `acrossfade` 音频过渡，自动统一分辨率/帧率 |
-| 字幕转场拼接 | 在转场拼接基础上，每个文件夹配多行文案，经 [Index-TTS](docs/index-tts-api.md) 合成配音，片段自动对齐配音时长 |
-| 批量分割 | 按固定秒数切段，可选同时导出 MP3、保留末尾余数片段 |
-| 画中画合成 | 前景视频叠加到背景视频，预设位置 + 缩放比例 |
-| 批量变速/倒放 | 0.1x–5x 变速，可倒放，音频同步 |
-| 批量旋转/翻转 | 90°/180°/270° 旋转与水平/垂直翻转 |
-| 批量添加水印 | 图片水印，预设位置 + 透明度 + 缩放 |
-| 批量调整音量 | 0.1x–10x 倍率 |
-| 批量添加标题 | 系统字体（中文名友好）、颜色、字号（像素/百分比）、按视频宽度自动换行，标题可来自 TXT 逐行分配 |
-| 批量填充音乐 | 用指定音频替换视频音轨，或与原声混合 |
-| 批量裁剪比例 | 9:16 / 16:9 / 1:1 等居中裁剪，视频与图片均支持 |
-| 批量压缩 | 指定目标码率，可选 H.265 编码 |
-| 批量格式转换 | 转为 mp4 / avi / mov / mkv |
-| 批量提取帧 | 按间隔抽帧为图片 |
+| Split-screen merge | Pairs files from two folders in order and `hstack`s them into 1080×1080; images supported |
+| Transition concat | Takes the i-th video from each of N folders and concatenates them with 20 `xfade` transitions + `acrossfade` audio crossfades; resolution/FPS normalized automatically |
+| Narrated concat | Transition concat plus per-folder script lines synthesized into voice-over via [Index-TTS](docs/index-tts-api.md); every clip is auto-aligned to its narration length |
+| Batch split | Cut into fixed-length segments, optionally exporting MP3 and keeping the trailing remainder |
+| Picture-in-picture | Overlay a foreground video onto a background one with preset position and scale |
+| Batch speed / reverse | 0.1x–5x speed change with synchronized audio, optional reverse |
+| Batch rotate / flip | 90°/180°/270° rotation, horizontal and vertical flip |
+| Batch watermark | Image watermark with preset position, opacity and scale |
+| Batch volume | 0.1x–10x gain |
+| Batch titles | System fonts (Chinese names resolved), color, size (pixels or % of height), auto line-wrap by video width; titles can be fed line-by-line from a TXT file |
+| Batch background music | Replace the video's audio track with a given file, or mix it with the original |
+| Batch aspect-ratio crop | Center-crop to 9:16 / 16:9 / 1:1 / 4:3 / 3:4 / 4:5 / 21:9, for both video and images |
+| Batch compress | Target bitrate, optional H.265 |
+| Batch format convert | Convert to mp4 / avi / mov / mkv |
+| Batch frame extract | Grab one frame every N seconds |
 
-通用能力：暂停 / 停止、实时日志与导出、极速模式（`ultrafast`）、统一码率或 CRF 控制、完成后一键打开输出目录。
+Across all features: pause / stop, live log with export, turbo mode (`ultrafast`), shared bitrate-or-CRF control, and one-click "open output folder" when a job finishes.
 
-## 快速开始（源码运行）
+## Quick Start (from source)
 
-### 环境要求
+### Prerequisites
 
 - Windows 10/11 x64
-- Python ≥ 3.10（开发使用 3.14）
-- [uv](https://docs.astral.sh/uv/)（依赖管理，`pip install uv` 或官方安装脚本）
-- `ffmpeg.exe` / `ffprobe.exe`（**不随仓库分发**，见下文）
+- Python ≥ 3.10 (developed on 3.14)
+- [uv](https://docs.astral.sh/uv/) for dependency management (`pip install uv`, or the official installer)
+- `ffmpeg.exe` / `ffprobe.exe` — **not bundled with this repo**, see step 2
 
-### 步骤
+### Steps
+
+#### 1. Clone and install dependencies
 
 ```bash
 git clone https://github.com/jaikydota/kk-mix.git
 cd kk-mix
-
-# 1. 安装依赖（自动创建 .venv）
 uv sync
-
-# 2. 放置 FFmpeg
-#    从 https://www.gyan.dev/ffmpeg/builds/ 或 https://github.com/BtbN/FFmpeg-Builds/releases
-#    下载 Windows 静态构建，把 ffmpeg.exe 和 ffprobe.exe 复制到项目根目录
-#    （或加入系统 PATH，程序会按 项目目录 → PATH → C:\ffmpeg\bin 的顺序查找）
-
-# 3. 运行
-uv run python kk_qt.py        # 或双击 start.cmd
 ```
 
-源码运行时**没有编译授权模块**，程序自动进入开发模式，跳过授权码验证。
+`uv sync` creates `.venv`, downloads a suitable Python if needed, and installs every dependency.
 
-### 配置
+#### 2. Get FFmpeg (the only manual step)
 
-程序目录下的 `settings.json` 保存全局设置（也可在界面「全局设置」中修改）。仓库提供了 `settings.example.json`：
+All video processing is done by shelling out to `ffmpeg.exe` / `ffprobe.exe`. These are **not distributed with the repo** (they are large and separately licensed), so download an official **prebuilt Windows binary** — **no compiling required**.
+
+| Source | Link | Which file |
+|---|---|---|
+| BtbN/FFmpeg-Builds (GitHub) | https://github.com/BtbN/FFmpeg-Builds/releases | `ffmpeg-master-latest-win64-gpl.zip` |
+| gyan.dev | https://www.gyan.dev/ffmpeg/builds/ | `ffmpeg-release-full.7z` |
+
+Unzip it, open the `bin` folder inside, and copy **both `ffmpeg.exe` and `ffprobe.exe`** into the project root:
+
+```
+kk-mix/
+├── ffmpeg.exe      ← here
+├── ffprobe.exe     ← here
+├── kk_qt.py
+├── pyproject.toml
+└── qt/
+```
+
+Both filenames are already in `.gitignore`, so they will never be committed by accident.
+
+> **You need both.** With `ffmpeg.exe` alone, duration and resolution probing fails and features like transition concat will not work.
+>
+> Alternatively, add the extracted `bin` folder to your system `PATH`. When running from source the actual lookup order is:
+> **system `PATH` → `C:\ffmpeg\bin` → `C:\Program Files\ffmpeg\bin` → `D:\ffmpeg\bin` → project root**.
+> Note that the project root is the *last* fallback — if another FFmpeg is already on your `PATH`, that one wins.
+
+#### 3. Run
+
+```bash
+uv run python kk_qt.py        # or double-click start.cmd
+```
+
+When run from source there is **no compiled license module**, so the app automatically enters development mode and skips license-key verification.
+
+> The app still launches without FFmpeg, but a persistent red "FFmpeg not found" banner appears and no processing feature will run.
+
+### Configuration
+
+Global settings live in `settings.json` next to the program (editable in-app via **Global Settings**). A template is provided:
 
 ```bash
 cp settings.example.json settings.json
 ```
 
-| 字段 | 说明 |
+| Field | Meaning |
 |---|---|
-| `tts_base_url` / `tts_api_key` | Index-TTS 服务地址与 api-key，仅「字幕转场拼接」需要 |
-| `verbose_log` | 打印完整的 ffmpeg 命令与 stderr |
-| `speed_priority` | `true` 用 `ultrafast` 预设，`false` 用 `medium` |
-| `compress_video` / `bitrate` | 开启后用 `-b:v <bitrate>`，否则 `-crf 23` |
+| `tts_base_url` / `tts_api_key` | Index-TTS endpoint and api-key; only needed by *Narrated concat* |
+| `verbose_log` | Print the full ffmpeg command line and stderr |
+| `speed_priority` | `true` uses the `ultrafast` preset, `false` uses `medium` |
+| `compress_video` / `bitrate` | When enabled, encodes with `-b:v <bitrate>`; otherwise `-crf 23` |
 
-### 字幕转场拼接（TTS）
+The file is optional — without it the app falls back to these defaults.
 
-该功能需要一个自建的 Index-TTS 服务，接口约定见 [docs/index-tts-api.md](docs/index-tts-api.md)。此外：
+### Narrated concat (TTS)
 
-1. 把用于音色克隆的参考音频放到 `assets/tts_reference.wav`（已 gitignore，不会被提交）；
-2. 在「全局设置」填写服务地址和 api-key；
-3. 首次运行会自动把参考音上传到服务端。
+This feature needs a self-hosted Index-TTS service; the expected API is documented in [docs/index-tts-api.md](docs/index-tts-api.md). In addition:
 
-## 打包发布
+1. Put the voice-cloning reference audio at `assets/tts_reference.wav` (gitignored, never committed);
+2. Fill in the endpoint and api-key under **Global Settings**;
+3. On first run the reference clip is uploaded to the server automatically.
 
-打包产物是 `dist/kk_qt/` 目录（含 ffmpeg、授权模块 `.pyd`），可直接压缩分发给最终用户。
+Every other feature works without any of this.
 
-### 额外要求
+## Building a Release
 
-- **Visual Studio Build Tools**（含「使用 C++ 的桌面开发」工作负载）——Cython 编译授权模块需要 MSVC
-- `uv sync` 已同时安装 dev 依赖（Cython、PyInstaller）
+The build output is `dist/kk_qt/` — a self-contained folder (FFmpeg and the license `.pyd` embedded) that can be zipped and handed to end users.
 
-### 一键打包
+### Extra requirements
+
+- **Visual Studio Build Tools** with the "Desktop development with C++" workload — MSVC is required to Cython-compile the license module
+- `uv sync` already installs the dev dependencies (Cython, PyInstaller)
+
+### One-click build
 
 ```bat
 build_qt.cmd
 ```
 
-流程：`setup_cython.py` 编译 `_license_core.pyx` → PyInstaller 打包主程序 → PyInstaller 打包 `keygen.exe` → 压缩为 `dist/kk_qt_<时间戳>.zip`。
+This runs: `setup_cython.py` compiles `_license_core.pyx` → PyInstaller packages the main app → PyInstaller packages `keygen.exe` → everything is zipped to `dist/kk_qt_<timestamp>.zip`.
 
-也可以分步执行：
+Step by step instead:
 
 ```bash
-uv run python setup_cython.py build_ext --inplace   # 生成 _license_core.cp3xx-win_amd64.pyd
-uv run pyinstaller kk_qt.spec --clean --noconfirm   # 生成 dist/kk_qt/
+uv run python setup_cython.py build_ext --inplace   # produces _license_core.cp3xx-win_amd64.pyd
+uv run pyinstaller kk_qt.spec --clean --noconfirm   # produces dist/kk_qt/
 ```
 
-### 授权机制与密钥（发布前必读）
+### Licensing system and build secrets (read before releasing)
 
-程序内置「一机一码」授权：机器码 = 主板 UUID + CPU ID 的 MD5；授权码 = AES-CBC 加密的 JSON（到期时间、绑定机器码）；`keygen.exe` 需管理员密码才能生成授权码。核心逻辑在 `_license_core.pyx`，编译为 `.pyd` 提高逆向门槛。
+The app ships with a per-machine licensing scheme: the machine ID is an MD5 of the motherboard UUID plus CPU ID; a license key is an AES-CBC encrypted JSON blob (expiry date, bound machine ID); `keygen.exe` requires an admin password to mint keys. The logic lives in `_license_core.pyx` and is compiled to a `.pyd` to raise the bar for reverse engineering.
 
-**仓库里不包含任何真实密钥。** `.pyx` 中的加密种子和管理员密码哈希是占位符，由 `setup_cython.py` 在编译时注入：
+**No real secrets are stored in this repo.** The encryption seed and the admin password hash in the `.pyx` are placeholders, injected at compile time by `setup_cython.py`:
 
 ```bash
-cp build_secrets.env.example build_secrets.env   # 已 gitignore
-# 编辑 build_secrets.env：
-#   KK_LICENSE_SEED=<一段随机长字符串>
-#   KK_ADMIN_PASSWORD=<keygen 管理员密码>
+cp build_secrets.env.example build_secrets.env   # gitignored
+# edit build_secrets.env:
+#   KK_LICENSE_SEED=<a long random string>
+#   KK_ADMIN_PASSWORD=<keygen admin password>
 build_qt.cmd
 ```
 
-也可以直接用同名环境变量（优先级高于文件）。不设置时使用开发默认值（seed=`kk-mix-dev`，密码=`admin`），**仅供本地调试，切勿用于正式发布**。换了 seed 后，之前发出的授权码全部失效。
+Environment variables of the same name also work and take priority. If neither is provided, development defaults are used (seed `kk-mix-dev`, password `admin`) — **fine for local testing, never for a real release**. Changing the seed invalidates every previously issued license key.
 
-如果你不需要授权功能，直接删掉 `kk_qt.py` 中的 `check_license()` 调用即可，其余代码不依赖 `.pyd`。
+If you do not want licensing at all, just delete the `check_license()` call in `kk_qt.py`; nothing else depends on the `.pyd`.
 
-## 项目结构
+## Project Layout
 
 ```
 kk-mix/
-├── kk_qt.py                 # 入口：QApplication → 授权检查 → MainWindow
-├── kk_qt.spec               # PyInstaller 配置（UPX 白名单、排除模块）
-├── build_qt.cmd             # 一键打包脚本
-├── setup_cython.py          # Cython 编译 + 密钥注入
-├── _license_core.pyx        # 授权核心（占位符，编译时注入真实密钥）
-├── keygen.py                # 授权码生成器（Tkinter，独立打包）
-├── settings.example.json    # 配置模板
+├── kk_qt.py                 # Entry point: QApplication → license check → MainWindow
+├── kk_qt.spec               # PyInstaller config (UPX exclusions, module excludes)
+├── build_qt.cmd             # One-click build script
+├── setup_cython.py          # Cython build + build-secret injection
+├── _license_core.pyx        # Licensing core (placeholders replaced at compile time)
+├── keygen.py                # License key generator (Tkinter, packaged separately)
+├── settings.example.json    # Config template
 ├── build_secrets.env.example
-├── assets/                  # logo；tts_reference.wav 需自行放置
+├── assets/                  # Logo; place tts_reference.wav here yourself
 ├── docs/
-│   └── index-tts-api.md     # TTS 服务接口约定
+│   └── index-tts-api.md     # TTS service API contract
 └── qt/
-    ├── main_window.py       # 导航 + 页面栈 + 日志/进度/暂停停止面板
-    ├── settings_window.py   # 全局设置对话框
+    ├── main_window.py       # Navigation + page stack + log/progress/pause-stop panel
+    ├── settings_window.py   # Global settings dialog
     ├── core/
-    │   ├── batch_worker.py  # BatchWorker(QThread) 基类、暂停/停止控制、统一 run_cmd
-    │   ├── ffmpeg_helper.py # 查找 ffmpeg / ffprobe 探测 / 编码参数
-    │   ├── app_settings.py  # AppSettings dataclass + JSON 持久化
-    │   ├── paths.py         # 版本号、扩展名集合、资源路径
-    │   ├── fonts.py         # 系统字体枚举（中文名映射）、标题自动换行
-    │   ├── tts_client.py    # Index-TTS 客户端
-    │   └── license.py       # 授权对话框
-    └── tabs/                # 每个功能一个文件，均继承 BaseTab
+    │   ├── batch_worker.py  # BatchWorker(QThread) base, pause/stop control, unified run_cmd
+    │   ├── ffmpeg_helper.py # FFmpeg/ffprobe discovery, media probing, encoder args
+    │   ├── app_settings.py  # AppSettings dataclass + JSON persistence
+    │   ├── paths.py         # Version, extension sets, resource paths
+    │   ├── fonts.py         # System font enumeration, title auto-wrap
+    │   ├── tts_client.py    # Index-TTS client
+    │   └── license.py       # License dialog
+    └── tabs/                # One file per feature, all subclassing BaseTab
 ```
 
-### 添加一个新功能页
+### Adding a feature page
 
-1. 新建 `qt/tabs/<name>.py`：
-   - `class <Name>Worker(BatchWorker)`：实现 `run_batch() -> (success, summary)`，循环中调用 `self.ctrl.wait_if_paused()`，用 `self.run_cmd(cmd)` 执行 ffmpeg，设置 `self.output_dir`；
-   - `class <Name>Tab(BaseTab)`：定义 `NAME / TITLE / ICON`，实现 `build_form()`（往 `self.form_layout` 填控件）和 `build_worker()`（校验参数并返回 Worker）。
-2. 在 `qt/main_window.py` 的 `_register_tabs()` 列表中加入 `<Name>Tab(self)`。
+1. Create `qt/tabs/<name>.py`:
+   - `class <Name>Worker(BatchWorker)` — implement `run_batch() -> (success, summary)`, call `self.ctrl.wait_if_paused()` inside the loop, run FFmpeg via `self.run_cmd(cmd)`, and set `self.output_dir`.
+   - `class <Name>Tab(BaseTab)` — define `NAME / TITLE / ICON`, implement `build_form()` (add widgets to `self.form_layout`) and `build_worker()` (validate input, return the worker).
+2. Append `<Name>Tab(self)` to the list in `_register_tabs()` in `qt/main_window.py`.
 
-更多约定见 [AGENTS.md](AGENTS.md)。
+More conventions in [AGENTS.md](AGENTS.md).
 
-## 常见问题
+## FAQ
 
-**启动提示「未找到 FFmpeg」** — 确认 `ffmpeg.exe` 在项目根目录或 PATH 中；打包版会自动内嵌。
+**"FFmpeg not found" on startup** — Make sure *both* `ffmpeg.exe` and `ffprobe.exe` are in place; see "Get FFmpeg" above. Packaged builds embed them automatically.
 
-**打包后启动即崩溃** — 多半是 UPX 压缩了 Qt DLL。`kk_qt.spec` 已把 `Qt6*.dll` 和 VC 运行库加入 `upx_exclude`，新增 DLL 时同样要加白名单，或直接关掉 UPX。
+**Packaged build crashes immediately** — Usually UPX compressing a Qt DLL. `kk_qt.spec` already whitelists `Qt6*.dll` and the VC runtime under `upx_exclude`; add any new DLL there, or disable UPX entirely.
 
-**`setup_cython.py` 报找不到 `cl.exe`** — 未安装 MSVC Build Tools，或需要在「x64 Native Tools Command Prompt」中执行。
+**`setup_cython.py` cannot find `cl.exe`** — MSVC Build Tools are not installed, or you need to run it from the "x64 Native Tools Command Prompt".
 
-**添加标题时「字体加载失败」** — 选择的字体文件不是 TTF/OTF/TTC，或路径含特殊字符；换一个系统字体重试。
+**"Font failed to load" when adding titles** — The selected font is not a TTF/OTF/TTC, or its path contains special characters; pick another system font.
 
-**字幕转场拼接报 401 / 缺少参考音** — 检查 `settings.json` 的 api-key；确认 `assets/tts_reference.wav` 存在（首次运行需上传）。
+**Narrated concat returns 401 / missing reference audio** — Check the api-key in `settings.json`, and make sure `assets/tts_reference.wav` exists (it is uploaded on first run).
 
-## 参与贡献
+## Contributing
 
-欢迎 Issue 和 PR。提交前请确保 `uv run python kk_qt.py` 能正常启动，且新功能页遵循上面的约定。
+Issues and pull requests are welcome. Before submitting, make sure `uv run python kk_qt.py` still launches and that any new feature page follows the conventions above.
 
-## 许可证
+When editing the README, please update both [README.md](README.md) (English) and [README.zh-CN.md](README.zh-CN.md) (Chinese).
+
+## License
 
 [MIT](LICENSE) © 2026 jaikydota
 
-本项目使用 [FFmpeg](https://ffmpeg.org/)（LGPL/GPL，需自行下载）、[PySide6](https://doc.qt.io/qtforpython/)（LGPL）、[PySide6-Fluent-Widgets](https://github.com/zhiyiYo/PyQt-Fluent-Widgets)（GPLv3，商业使用请注意其许可条款）。
+This project builds on [FFmpeg](https://ffmpeg.org/) (LGPL/GPL, downloaded separately by the user), [PySide6](https://doc.qt.io/qtforpython/) (LGPL) and [PySide6-Fluent-Widgets](https://github.com/zhiyiYo/PyQt-Fluent-Widgets) (GPLv3 — review its terms for commercial use).
