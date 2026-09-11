@@ -107,6 +107,9 @@ kk_qt.py
 - **构建**：先 `uv run python setup_cython.py build_ext --inplace`，再 `build_qt.cmd`
 - **打包排除**：`kk_qt.spec` 已排除 tkinter / moviepy / matplotlib 等无关大模块
 - **UPX 白名单**：Qt6*.dll 和 VC Runtime 禁止 UPX 压缩（会导致启动崩溃）
+- **窗口最小高度**：`NavigationInterface` 每加一项就抬高自身 `minimumHeight`（18 项约 870px），
+  会把主窗口顶到小屏幕装不下。主窗口把 nav 包进 `QScrollArea`（`_sync_nav_width` 同步宽度），
+  `BaseTab` 表单也整体放在滚动区里——这两处都别回退成直接 addWidget
 - **依赖**：新增第三方库前确认确有引用；`pyproject.toml` 改动后运行 `uv lock`
 
 ## 已知待办

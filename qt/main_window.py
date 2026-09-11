@@ -5,12 +5,13 @@ from qt.core.i18n import tr
 
 import os
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QMainWindow,
+    QScrollArea,
     QSplitter,
     QStackedWidget,
     QVBoxLayout,
@@ -68,7 +69,7 @@ class MainWindow(QMainWindow):
         self.ffmpeg_path = find_ffmpeg()
 
         self.setWindowTitle(f"{tr(APP_NAME)} {VERSION}")
-        self.resize(1180, 820)
+        self.resize(1180, 760)
         icon_path = resource_path(os.path.join("assets", "logo.ico"))
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
@@ -102,7 +103,23 @@ class MainWindow(QMainWindow):
         self.nav.setExpandWidth(180)
         self.stack = QStackedWidget(self)
 
-        body_layout.addWidget(self.nav)
+        # 导航项一多（15 个功能页 + 3 个底部项），qfluentwidgets 会把 nav 的
+        # minimumHeight 顶到 ~870px，主窗口就再也缩不小了。这里包一层滚动区：
+        # nav 保留自身高度，窗口变矮时滚动显示，而不是把导航项压到互相重叠。
+        self.nav_scroll = QScrollArea(self)
+        self.nav_scroll.setWidget(self.nav)
+        self.nav_scroll.setWidgetResizable(True)
+        self.nav_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.nav_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self.nav_scroll.viewport().setStyleSheet("background: transparent;")
+        self.nav.installEventFilter(self)
+        self.nav_scroll.verticalScrollBar().rangeChanged.connect(
+            lambda *_: self._sync_nav_width()
+        )
+
+        body_layout.addWidget(self.nav_scroll)
+        self._sync_nav_width()
 
         sep = QFrame(self)
         sep.setFrameShape(QFrame.Shape.VLine)
@@ -120,9 +137,25 @@ class MainWindow(QMainWindow):
         splitter.addWidget(bottom)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([560, 220])
+        splitter.setSizes([520, 200])
 
         root.addWidget(splitter)
+
+    def _sync_nav_width(self):
+        """滚动区宽度跟随导航栏的展开/收起，并为纵向滚动条预留空间。
+
+        用 maximum() 而非 isVisible() 判断滚动条是否占位：构建期滚动条尚未
+        实际显示，此时按不可见计算会让视口比导航栏窄一条，把文字横向裁掉。
+        nav 高度固定，滚动范围只随窗口高度变化，不会与本方法互相触发振荡。
+        """
+        bar = self.nav_scroll.verticalScrollBar()
+        extra = bar.sizeHint().width() if bar.maximum() > 0 else 0
+        self.nav_scroll.setFixedWidth(self.nav.width() + extra)
+
+    def eventFilter(self, obj, event):
+        if obj is self.nav and event.type() == QEvent.Type.Resize:
+            self._sync_nav_width()
+        return super().eventFilter(obj, event)
 
     def _build_bottom_panel(self) -> QWidget:
         panel = QFrame(self)
@@ -222,6 +255,8 @@ class MainWindow(QMainWindow):
             position=NavigationItemPosition.BOTTOM,
             selectable=False,
         )
+
+        self._sync_nav_width()
 
         if self.stack.count() > 0:
             first_tab = self.stack.widget(0)

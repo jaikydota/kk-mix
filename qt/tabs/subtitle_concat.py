@@ -306,7 +306,7 @@ class SubtitleConcatTab(BaseTab):
         scroll = ScrollArea(list_holder)
         scroll.setWidget(self.rows_container)
         scroll.setWidgetResizable(True)
-        scroll.setMinimumHeight(280)
+        scroll.setMinimumHeight(190)
         scroll.setMaximumHeight(400)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")

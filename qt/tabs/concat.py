@@ -286,7 +286,7 @@ class ConcatTab(BaseTab):
         scroll = ScrollArea(list_holder)
         scroll.setWidget(self.rows_container)
         scroll.setWidgetResizable(True)
-        scroll.setMinimumHeight(210)
+        scroll.setMinimumHeight(150)
         scroll.setMaximumHeight(260)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")

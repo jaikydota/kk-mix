@@ -12,6 +12,7 @@ from qt.core.i18n import tr
 import os
 from typing import TYPE_CHECKING
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
@@ -34,6 +35,7 @@ from qfluentwidgets import (
     PrimaryPushButton,
     PushButton,
     RadioButton,
+    ScrollArea,
     SpinBox,
     StrongBodyLabel,
 )
@@ -58,15 +60,33 @@ class BaseTab(QWidget):
 
     # ─── UI 组装 ───
     def _build_ui(self):
-        outer = QVBoxLayout(self)
+        # 表单放进滚动区：否则最长的 Tab 会把整个主窗口的最小高度撑到装不下小屏幕
+        page = QVBoxLayout(self)
+        page.setContentsMargins(0, 0, 0, 0)
+        page.setSpacing(0)
+
+        self.scroll = ScrollArea(self)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll.setStyleSheet(
+            "QScrollArea { border: none; background: transparent; }"
+        )
+        page.addWidget(self.scroll)
+
+        content = QWidget()
+        content.setObjectName(f"{self.NAME}_content")
+        content.setStyleSheet("background: transparent;")
+        self.scroll.setWidget(content)
+
+        outer = QVBoxLayout(content)
         outer.setContentsMargins(28, 24, 28, 20)
         outer.setSpacing(18)
 
-        header = StrongBodyLabel(tr(self.TITLE), self)
+        header = StrongBodyLabel(tr(self.TITLE), content)
         header.setStyleSheet("font-size: 22px; font-weight: 600;")
         outer.addWidget(header)
 
-        self.form_card = QWidget(self)
+        self.form_card = QWidget(content)
         self.form_layout = QGridLayout(self.form_card)
         self.form_layout.setContentsMargins(8, 8, 8, 8)
         self.form_layout.setHorizontalSpacing(14)
@@ -74,7 +94,7 @@ class BaseTab(QWidget):
         self.build_form()
         outer.addWidget(self.form_card)
 
-        self.start_btn = PrimaryPushButton(tr("开始批量处理"), self, FluentIcon.PLAY)
+        self.start_btn = PrimaryPushButton(tr("开始批量处理"), content, FluentIcon.PLAY)
         self.start_btn.setFixedHeight(42)
         self.start_btn.clicked.connect(self._on_start)
         outer.addWidget(self.start_btn)
