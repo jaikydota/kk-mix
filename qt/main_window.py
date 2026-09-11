@@ -104,7 +104,8 @@ class MainWindow(QMainWindow):
         body_layout.setSpacing(0)
 
         self.nav = NavigationInterface(self, showMenuButton=True)
-        self.nav.setExpandWidth(180)
+        # 英文标签比中文长（"Batch background music"），展开宽度按语言给
+        self.nav.setExpandWidth(180 if i18n.current() == "zh" else 222)
         self.stack = QStackedWidget(self)
 
         # 导航项一多（15 个功能页 + 3 个底部项），qfluentwidgets 会把 nav 的

@@ -28,7 +28,8 @@ kk-mix/
 ├── settings.example.json      # 配置模板；settings.json 本身已 gitignore
 ├── build_secrets.env.example  # 密钥模板；build_secrets.env 已 gitignore
 ├── docs/
-│   └── index-tts-api.md       # Index-TTS 接口约定
+│   ├── index-tts-api.md       # Index-TTS 接口约定
+│   └── screenshots/           # README 配图，界面改动后用 tools/make_screenshots.py 重出
 ├── assets/                    # logo.ico / logo.png；tts_reference.wav 用户自备（gitignore）
 └── qt/
     ├── main_window.py         # 主窗口：NavigationInterface + QStackedWidget + 日志面板
@@ -51,7 +52,8 @@ kk-mix/
         ├── split.py / pip.py / speed.py / rotate.py / watermark.py / volume.py
         ├── title.py / music.py / crop.py / compress.py / convert.py / extract.py
 ├── tools/
-│   └── check_i18n.py          # i18n 覆盖率检查（未包装中文 / 缺译文 / 占位符不一致）
+│   ├── check_i18n.py          # i18n 覆盖率检查（未包装中文 / 缺译文 / 占位符不一致）
+│   └── make_screenshots.py    # 生成 docs/screenshots/{zh,en}/ 的 README 配图（原生 QPA + WA_DontShowOnScreen）
 ```
 
 ## 架构模式
@@ -85,7 +87,7 @@ kk_qt.py
    - 添加到 tabs 列表
 
 3. 英文译文补进 qt/core/translations_en.py，运行 uv run python tools/check_i18n.py
-4. README.md / README.zh-CN.md 功能表各加一行
+4. README.md / README.zh-CN.md 功能表各加一行；界面有变化则重跑 tools/make_screenshots.py
 ```
 
 ## 关键约定

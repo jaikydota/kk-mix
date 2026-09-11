@@ -2,33 +2,129 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-A Windows batch video editing toolkit powered by FFmpeg. PySide6 + Fluent Design UI, 15 batch operations, packable into a single portable folder.
+Batch video editing for Windows, driven by folders instead of timelines. Point it at a folder (or several), pick an operation, and it writes a folder of finished videos — 15 operations, all powered by FFmpeg, wrapped in a PySide6 Fluent UI.
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+![kk-mix overview](docs/screenshots/en/overview.png)
+
+## Why kk-mix
+
+Timeline editors are built for one video at a time. kk-mix is built for the other situation: fifty clips that all need the same treatment, or five folders of footage that need to become twenty *different* videos. Every operation is a form, not a timeline — fill in the folders and parameters, press Start, watch the log.
+
+- **Folder in, folder out.** Every operation reads a folder and writes a folder; files are processed in name order so outputs line up with inputs.
+- **Pause / stop mid-batch**, a live log, and a one-click *Open folder* when it finishes.
+- **No learning curve.** If you can pick a folder you can use it.
+- **Bilingual UI** — English and Simplified Chinese, switched with one click.
+- **Portable build** — package into a single folder with FFmpeg embedded; nothing to install.
+
+## What people use it for
+
+| Scenario | How kk-mix fits |
+|---|---|
+| **Short-video matrix / multi-account publishing** | Put hooks, product shots and outros in separate folders; *Transition concat* joins the *i*-th clip of each into one video — 5 folders × 20 clips = 20 distinct videos in a single run, no two alike. |
+| **E-commerce product videos** | *Narrated concat* turns a script into a voice-over and cuts every clip to its narration length; then *Batch titles*, *Batch watermark* and *Aspect crop* to 9:16 for the platform. |
+| **Course / livestream / podcast slicing** | *Batch split* cuts long recordings into fixed-length parts, optionally with an MP3 per part. |
+| **Brand compliance at scale** | Stamp every file with a logo (*Watermark*), a headline from a TXT list (*Titles*), and a consistent loudness (*Volume*). |
+| **Platform delivery & archiving** | *Aspect crop* to 9:16 / 16:9 / 1:1 / 4:5, *Compress* to a target bitrate in H.264 or H.265, *Convert* containers, *Extract frames* for thumbnails. |
+| **Comparison & reaction formats** | *Split-screen merge* pairs two folders into 1080×1080 left/right videos; *Picture-in-picture* drops a webcam or product clip over the main footage. |
+
 ## Features
 
-| Feature | Description |
-|---|---|
-| Split-screen merge | Pairs files from two folders in order and `hstack`s them into 1080×1080; images supported |
-| Transition concat | Takes the i-th video from each of N folders and concatenates them with 20 `xfade` transitions + `acrossfade` audio crossfades; resolution/FPS normalized automatically |
-| Narrated concat | Transition concat plus per-folder script lines synthesized into voice-over via [Index-TTS](docs/index-tts-api.md); every clip is auto-aligned to its narration length |
-| Batch split | Cut into fixed-length segments, optionally exporting MP3 and keeping the trailing remainder |
-| Picture-in-picture | Overlay a foreground video onto a background one with preset position and scale |
-| Batch speed / reverse | 0.1x–5x speed change with synchronized audio, optional reverse |
-| Batch rotate / flip | 90°/180°/270° rotation, horizontal and vertical flip |
-| Batch watermark | Image watermark with preset position, opacity and scale |
-| Batch volume | 0.1x–10x gain |
-| Batch titles | System fonts (Chinese names resolved), color, size (pixels or % of height), auto line-wrap by video width; titles can be fed line-by-line from a TXT file |
-| Batch background music | Replace the video's audio track with a given file, or mix it with the original |
-| Batch aspect-ratio crop | Center-crop to 9:16 / 16:9 / 1:1 / 4:3 / 3:4 / 4:5 / 21:9, for both video and images |
-| Batch compress | Target bitrate, optional H.265 |
-| Batch format convert | Convert to mp4 / avi / mov / mkv |
-| Batch frame extract | Grab one frame every N seconds |
+### Compose
 
-Across all features: pause / stop, live log with export, turbo mode (`ultrafast`), shared bitrate-or-CRF control, and one-click "open output folder" when a job finishes.
+#### Transition concat
+
+![Transition concat](docs/screenshots/en/concat.png)
+
+Give it N folders (5 rows to start, add as many as you like). It sorts each folder, takes the *i*-th file from every folder and joins them in order — 3 folders of 20 clips give you 20 videos, each a different combination. Clips are normalized to the first clip's resolution and frame rate (crop-to-fill, never stretched), and a silent track is added to clips without audio so joins never fail. 20 `xfade` transitions (fade, wipe, slide, smooth, circle, radial, dissolve, pixelize…) with a matching `acrossfade` on the audio; a transition longer than the shortest clip is clamped automatically; set it to 0 for a hard cut.
+
+#### Narrated concat
+
+![Narrated concat](docs/screenshots/en/narrated_concat.png)
+
+Transition concat with a script. Each folder gets a block of text, one line per video: line *k* is synthesized into speech for the *k*-th video (lines are reused cyclically if there are fewer lines than videos). Every clip is looped or trimmed to exactly its narration length, the original audio is dropped, narration plays back-to-back, and video transitions live in an extra tail so speech never overlaps. Speech comes from a self-hosted [Index-TTS](docs/index-tts-api.md) service cloning one reference voice, with a fixed seed so every clip sounds like the same speaker.
+
+#### Split-screen merge
+
+Pairs folder 1 and folder 2 in order and puts them side by side: each half is fitted into 540×1080 (letterboxed, never stretched) for a 1080×1080 output. Keep the audio from the left, the right, or neither; still images are held for a configurable number of seconds; the output is cut to the shorter of the two clips.
+
+#### Picture-in-picture
+
+Background folder + foreground folder, paired in order. The foreground is scaled to 10–100 % of the background and pinned to one of the four corners.
+
+### Cut & adjust
+
+| Feature | What it does |
+|---|---|
+| **Batch split** | Cut every video into fixed-length segments (1 s – 1 h). Optionally export an MP3 for each segment and keep the trailing remainder (if longer than 0.5 s). |
+| **Batch speed / reverse** | 0.1×–5× with audio kept in sync; optional reverse. |
+| **Batch rotate / flip** | 90° clockwise, 180°, 90° counter-clockwise, horizontal flip, vertical flip. |
+| **Batch aspect crop** | Center-crop to 9:16, 16:9, 1:1, 4:3, 3:4, 4:5 or 21:9 — videos and images alike. |
+
+### Brand & audio
+
+#### Batch titles
+
+![Batch titles](docs/screenshots/en/title.png)
+
+Burn a headline into every video. Pick any installed font (CJK fonts are listed by their Chinese names), size it in pixels or as a % of video height, position it as a % from the top, choose a colour preset or open the picker. Text is auto-wrapped to the video width and drawn with an outline and drop shadow so it stays readable on any background. Use one fixed title, or point it at a TXT file and each video takes the next line (wrapping around when the list runs out).
+
+| Feature | What it does |
+|---|---|
+| **Batch watermark** | Overlay a PNG/JPG/WebP at one of five positions, 5–100 % opacity, sized 2–50 % of the video width. |
+| **Batch background music** | Pair each video with a track from a music folder (audio files, or videos whose audio gets extracted; the last track repeats if you run out). Replace the original audio or mix the two. |
+| **Batch volume** | 0.1×–10× gain. |
+
+### Deliver
+
+| Feature | What it does |
+|---|---|
+| **Batch compress** | Target bitrate from 0.5M to 8M, H.264 or H.265. |
+| **Batch convert** | Re-encode to mp4, avi, mov or mkv. |
+| **Batch frame extract** | Save one JPG every *N* seconds (0.1–600) from every video. |
+
+### Every operation gets
+
+![Batch finished](docs/screenshots/en/batch_done.png)
+
+- **Pause / Stop** at any point — the current file finishes, the rest wait or are skipped.
+- A **live log** (collapsible, maximizable, exportable) with a ✓/✗ per file and a final tally; turn on *Verbose log* in Settings to see every FFmpeg command line.
+- An **Open folder** button on the completion toast.
+- Global **turbo mode** (`ultrafast` preset) and **bitrate-or-CRF** control that apply to every encode.
+
+## Worked example: 3 folders → 20 unique videos
+
+1. Put 20 hook clips in `hooks\`, 20 product shots in `product\` and 20 outros in `outro\`.
+2. Open **Transition concat**, point folders 1/2/3 at them, pick *Dissolve* at 0.5 s, press **Start**.
+3. You get `concat_001.mp4` … `concat_020.mp4`, each one `hooks[i] + product[i] + outro[i]`.
+4. Optional: run **Batch titles** on that output folder with a 20-line TXT so every video gets its own headline, then **Batch watermark**, then **Aspect crop** to 9:16.
+
+Every step is folder → folder, so chaining operations is just pointing the next one at the previous output.
+
+## Output naming
+
+| Operation | Output file |
+|---|---|
+| Split-screen merge | `merge_001_<left>_<right>.mp4` |
+| Transition concat | `concat_001.mp4` |
+| Narrated concat | `sub_concat_001.mp4` |
+| Batch split | `<name>_part001.mp4` (+ `<name>_part001.mp3`) |
+| Picture-in-picture | `pip_001_<background>.mp4` |
+| Speed / reverse | `speed_001_<1.5x or reverse>_<name>.mp4` |
+| Rotate / flip | `rotate_001_<op>_<name>.mp4` |
+| Watermark | `watermark_001_<name>.mp4` |
+| Volume | `volume_001_<factor>x_<name>.mp4` |
+| Titles | `title_001_<name>.mp4` — default folder `<source>\title_output` |
+| Background music | `music_001_<name>.mp4` |
+| Aspect crop | `crop_9x16_001_<name>.<ext>` — default folder `<source>\crop_output` |
+| Compress | `compress_<bitrate>_001_<name>.mp4` |
+| Convert | `convert_001_<name>.<ext>` |
+| Frame extract | `<name>_0001.jpg`, `<name>_0002.jpg`, … |
+
+The number is the file's position in the sorted source folder, so outputs line up with inputs. Unless noted, the default output folder is `Desktop\VideoOutput`.
 
 ## Quick Start (from source)
 
@@ -94,6 +190,8 @@ Licensing is **off by default**, so the app starts straight up with no license k
 The UI is available in **English** and **Simplified Chinese**, defaulting to **Simplified Chinese**. Click **简体中文 / English** at the bottom of the left navigation bar to switch at any time — the window is rebuilt instantly and the log is preserved. The choice is saved as `language` in `settings.json`.
 
 ### Configuration
+
+![Settings dialog](docs/screenshots/en/settings.png)
 
 Global settings live in `settings.json` next to the program (editable in-app via **Global Settings**). A template is provided:
 
@@ -185,7 +283,8 @@ kk-mix/
 ├── build_secrets.env.example
 ├── assets/                  # Logo; place tts_reference.wav here yourself
 ├── docs/
-│   └── index-tts-api.md     # TTS service API contract
+│   ├── index-tts-api.md     # TTS service API contract
+│   └── screenshots/         # README images, regenerated by tools/make_screenshots.py
 └── qt/
     ├── main_window.py       # Navigation + page stack + log/progress/pause-stop panel
     ├── settings_window.py   # Global settings dialog
@@ -200,7 +299,9 @@ kk-mix/
     │   ├── translations_en.py # English strings (keyed by the Chinese source text)
     │   └── license.py       # License dialog
     ├── tabs/                # One file per feature, all subclassing BaseTab
-    └── tools/check_i18n.py  # i18n coverage check
+    └── tools/
+        ├── check_i18n.py    # i18n coverage check
+        └── make_screenshots.py  # regenerates docs/screenshots (both languages)
 ```
 
 ### Adding a feature page
@@ -231,7 +332,7 @@ More conventions in [AGENTS.md](AGENTS.md).
 
 Issues and pull requests are welcome. Before submitting, make sure `uv run python kk_qt.py` still launches and that any new feature page follows the conventions above.
 
-When editing the README, please update both [README.md](README.md) (English) and [README.zh-CN.md](README.zh-CN.md) (Chinese).
+When editing the README, please update both [README.md](README.md) (English) and [README.zh-CN.md](README.zh-CN.md) (Chinese). After a UI change, regenerate the screenshots with `uv run python tools/make_screenshots.py` (needs FFmpeg for the "batch finished" shot).
 
 ## License
 
